@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { GraduationCap, Briefcase, LogOut, UserCheck } from 'lucide-react';
+import { GraduationCap, Briefcase, LogOut } from 'lucide-react';
 import Login from './pages/Login';
 import FacultyDashboard from './pages/faculty/FacultyDashboard';
-import QuestionGenerator from './pages/faculty/QuestionGenerator';
 import EvaluationReview from './pages/faculty/EvaluationReview';
 import CreateVivaSession from './pages/faculty/CreateVivaSession';
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -140,11 +139,6 @@ export default function App() {
             <Route path="/faculty/viva/create" element={
               <ProtectedRoute allowedRole="faculty">
                 <CreateVivaSession />
-              </ProtectedRoute>
-            } />
-            <Route path="/faculty/questions" element={
-              <ProtectedRoute allowedRole="faculty">
-                <QuestionGenerator />
               </ProtectedRoute>
             } />
             <Route path="/faculty/evaluations" element={

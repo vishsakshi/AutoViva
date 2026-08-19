@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, Sparkles, FileCheck, ArrowRight, PlusCircle } from 'lucide-react';
+import { ShieldCheck, FileCheck, ArrowRight, PlusCircle } from 'lucide-react';
 
 export default function FacultyDashboard() {
   return (
@@ -25,74 +25,60 @@ export default function FacultyDashboard() {
         </div>
       </div>
 
-      {/* Feature Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Clean 2-Card Feature Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
-        {/* CREATE VIVA PIPELINE CARD (PRIMARY WORKFLOW) */}
-        <div className="p-8 bg-white rounded-3xl border-2 border-[#0F766E] shadow-sm hover:shadow-md transition-all space-y-4 relative overflow-hidden">
-          <div className="w-10 h-10 rounded-2xl bg-[#0F766E] text-white flex items-center justify-center mb-2 shadow-sm shadow-[#0F766E]/20">
-            <PlusCircle className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold uppercase tracking-wider block w-fit mb-1">
-              PRIMARY WORKFLOW
-            </span>
-            <h3 className="text-base font-bold text-slate-900">Create Faculty Viva Pipeline</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Configure viva parameters, upload syllabus PDF/PPT/DOCX documents to Knowledge Base, review grounded questions, and publish to students.
-            </p>
+        {/* CARD 1: CREATE FACULTY VIVA PIPELINE (PRIMARY WORKFLOW - 50% WIDTH) */}
+        <div className="p-8 bg-white rounded-3xl border-2 border-[#0F766E] shadow-sm hover:shadow-md transition-all space-y-5 relative overflow-hidden flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="flex justify-between items-start">
+              <div className="w-12 h-12 rounded-2xl bg-[#0F766E] text-white flex items-center justify-center shadow-md shadow-[#0F766E]/20">
+                <PlusCircle className="w-6 h-6" />
+              </div>
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-extrabold uppercase tracking-wider">
+                PRIMARY WORKFLOW
+              </span>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Create Faculty Viva Pipeline</h3>
+              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                Configure viva metadata parameters, upload syllabus PDF/PPT/DOCX documents to Knowledge Base, automatically extract grounded questions, review evaluation rubrics, and publish the official viva session.
+              </p>
+            </div>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-4 border-t border-slate-100">
             <Link
               to="/faculty/viva/create"
-              className="w-full py-3.5 bg-[#0F766E] hover:bg-[#0D645D] text-white font-bold text-xs text-center rounded-2xl transition-all shadow-md shadow-[#0F766E]/20 flex items-center justify-center gap-2"
+              className="w-full py-4 bg-[#0F766E] hover:bg-[#0D645D] text-white font-bold text-xs text-center rounded-2xl transition-all shadow-md shadow-[#0F766E]/20 flex items-center justify-center gap-2"
             >
               Start Viva Creation Pipeline <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
 
-        {/* AI QUESTION GENERATOR CARD */}
-        <div className="p-8 bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all space-y-4">
-          <div className="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-[#0F766E] mb-2">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Standalone Question Generator</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Generate syllabus-grounded oral viva questions with automated retrieval confidence gates and quality safeguards.
-            </p>
+        {/* CARD 2: FACULTY REVIEW & OVERRIDE QUEUE (SECONDARY ACTION - 50% WIDTH) */}
+        <div className="p-8 bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all space-y-5 flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700">
+              <FileCheck className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Faculty Review & Override Queue</h3>
+              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                Review AI preliminary evaluation scores, inspect verbatim student evidence quotes, override criterion marks, provide custom feedback, and publish official academic results.
+              </p>
+            </div>
           </div>
 
-          <div className="pt-2">
-            <Link
-              to="/faculty/questions"
-              className="w-full py-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold text-xs text-center rounded-2xl transition-all flex items-center justify-center gap-2"
-            >
-              Open Question Generator <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-
-        {/* EVALUATION REVIEW CARD */}
-        <div className="p-8 bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all space-y-4">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 mb-2">
-            <FileCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Faculty Review & Override Queue</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Review AI preliminary scores, inspect verbatim evidence quotes, override criterion marks, and publish official results.
-            </p>
-          </div>
-
-          <div className="pt-2">
+          <div className="pt-4 border-t border-slate-100">
             <Link
               to="/faculty/evaluations"
-              className="w-full py-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold text-xs text-center rounded-2xl transition-all flex items-center justify-center gap-2"
+              className="w-full py-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold text-xs text-center rounded-2xl transition-all flex items-center justify-center gap-2"
             >
-              Open Evaluation Review <ArrowRight className="w-4 h-4" />
+              Open Evaluation Review Queue <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>

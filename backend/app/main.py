@@ -8,15 +8,12 @@ from app.routes import (
     auth,
     faculty,
     student,
-    questions,
     viva,
     faculty_viva,
     evaluation,
     analytics,
     knowledge,
 )
-
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -64,11 +61,8 @@ app.include_router(health.router, prefix=api_prefix)
 app.include_router(auth.router, prefix=api_prefix)
 app.include_router(faculty.router, prefix=api_prefix)
 app.include_router(student.router, prefix=api_prefix)
-app.include_router(questions.router, prefix=api_prefix)
 app.include_router(viva.router, prefix=api_prefix)
 app.include_router(faculty_viva.router, prefix=api_prefix)
 app.include_router(evaluation.router, prefix=api_prefix)
-
 app.include_router(analytics.router, prefix=api_prefix)
 app.include_router(knowledge.router, prefix=api_prefix)
-

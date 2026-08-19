@@ -3,8 +3,8 @@ from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "VivaBot API"
-    VERSION: str = "0.1.0"
+    PROJECT_NAME: str = "AutoViva API"
+    VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"
     
     # MongoDB
@@ -16,9 +16,13 @@ class Settings(BaseSettings):
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
     
-    # LLM Settings
+    # LLM Settings (Configurable Provider: OpenAI, Ollama, DeepSeek, Local, Mock)
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai_compatible")
     LLM_API_URL: str = os.getenv("LLM_API_URL", "https://api.openai.com/v1")
     LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+    LLM_TIMEOUT_SECONDS: int = int(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
     
     # Environment
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
@@ -26,4 +30,3 @@ class Settings(BaseSettings):
     model_config = ConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
-
