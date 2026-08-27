@@ -50,20 +50,35 @@ class DocumentProcessor:
 
     def detect_section_header(self, line: str) -> str:
         """
-        Detects if a line is a section or unit heading.
+        Detects if a line is a real section or unit heading.
         e.g., 'Unit 1: Vector Space Models', 'Chapter 3: NAPT', '3.1 Cosine Similarity'
+        Excludes noise, single words ('OUTPUT'), author names, and document labels ('DOC 1').
         """
         line_clean = line.strip()
+        l_lower = line_clean.lower()
+
+        # Reject document/example labels, author names, single noise words
+        if re.match(r"^\s*(doc|document|example|fig|figure|table|slide|page)\s*\d+[\s:\.\-]", l_lower):
+            return ""
+        if l_lower in ["output", "input", "example", "table", "figure", "overview", "introduction"]:
+            return ""
+        if any(nk in l_lower for nk in ["mayank singh", "copyright", "rights reserved", "written by"]):
+            return ""
+
         # Check for explicit heading keywords or numbering
         heading_patterns = [
             r"^(unit|chapter|module|section|part)\s*(\d+|[IVXLCDM]+)[\s:\.\-]+(.+)$",
-            r"^(\d+\.\d+(\.\d+)?)\s+([A-Z].+)$",
-            r"^([A-Z\s]{4,40})$"  # All caps short header (e.g. DISTRIBUTIONAL SEMANTICS)
+            r"^(\d+\.\d+(\.\d+)?)\s+([A-Z].+)$"
         ]
         for pat in heading_patterns:
             m = re.match(pat, line_clean, re.IGNORECASE)
             if m:
                 return line_clean
+
+        # All-caps short header check (must contain at least 2 words or a known academic term, e.g. "DISTRIBUTIONAL SEMANTICS")
+        if re.match(r"^([A-Z\s]{5,40})$", line_clean) and len(line_clean.split()) >= 2:
+            return line_clean
+
         return ""
 
     def process_pdf(self, file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:

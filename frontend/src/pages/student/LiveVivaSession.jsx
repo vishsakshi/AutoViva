@@ -19,8 +19,12 @@ import {
   ShieldCheck,
   ChevronRight,
   SkipForward,
-  Loader2
+  Loader2,
+  Smile,
+  Eye,
+  AlertCircle
 } from 'lucide-react';
+import { facialExpressionAnalyzer } from '../../services/facialExpressionAnalyzer';
 
 export default function LiveVivaSession() {
   const navigate = useNavigate();
@@ -107,6 +111,14 @@ export default function LiveVivaSession() {
     }
   };
 
+  // Facial Expression Analysis State
+  const [facialAnalysis, setFacialAnalysis] = useState({
+    state: 'LOADING',
+    displayLabel: 'Loading facial analysis...',
+    confidence: 0,
+    faceDetected: false
+  });
+
   useEffect(() => {
     requestMediaPermissions();
     return () => {
@@ -115,6 +127,58 @@ export default function LiveVivaSession() {
       }
     };
   }, []);
+
+  // Real-time Facial Expression Analysis Loop (Using existing video stream)
+  useEffect(() => {
+    let animFrameId = null;
+    let isActive = true;
+
+    const initAndStartAnalysis = async () => {
+      if (!permissionGranted || !videoRef.current) return;
+
+      setFacialAnalysis({
+        state: 'LOADING',
+        displayLabel: 'Loading facial analysis...',
+        confidence: 0,
+        faceDetected: false
+      });
+
+      const isLoaded = await facialExpressionAnalyzer.initialize();
+      if (!isLoaded || !isActive) {
+        setFacialAnalysis({
+          state: 'MODEL_UNAVAILABLE',
+          displayLabel: 'Facial analysis unavailable',
+          confidence: 0,
+          faceDetected: false
+        });
+        return;
+      }
+
+      const processLoop = (timestamp) => {
+        if (!isActive) return;
+        if (videoRef.current && videoRef.current.readyState >= 2) {
+          const result = facialExpressionAnalyzer.analyzeVideoFrame(videoRef.current, timestamp);
+          if (result && isActive) {
+            setFacialAnalysis(result);
+          }
+        }
+        animFrameId = requestAnimationFrame(processLoop);
+      };
+
+      animFrameId = requestAnimationFrame(processLoop);
+    };
+
+    if (permissionGranted) {
+      initAndStartAnalysis();
+    }
+
+    return () => {
+      isActive = false;
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+      }
+    };
+  }, [permissionGranted]);
 
   // ---------------------------------------------------------------------------
   // 3. TIMERS & MIC SENSITIVITY ANIMATION
@@ -428,13 +492,27 @@ export default function LiveVivaSession() {
                 )}
 
                 {permissionGranted && (
-                  <div className="absolute bottom-2.5 left-2.5 right-2.5 flex justify-between items-center text-xs font-medium px-3 py-1 bg-slate-900/80 backdrop-blur-md rounded-xl text-white">
-                    <span className="flex items-center gap-1.5 text-emerald-400">
-                      <Mic className="w-3.5 h-3.5" /> Mic Active
-                    </span>
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <ShieldCheck className="w-3.5 h-3.5 text-teal-400" /> ID Verified
-                    </span>
+                  <div className="absolute top-3 left-3 right-3 flex justify-between items-center text-xs font-semibold px-3.5 py-2 bg-slate-900/85 backdrop-blur-md rounded-2xl text-white border border-white/10 shadow-lg z-20 transition-all">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🎭</span>
+                      <span className="text-slate-100 font-bold text-xs tracking-tight">
+                        {facialAnalysis.displayLabel}
+                      </span>
+                      {facialAnalysis.confidence > 0 && facialAnalysis.faceDetected && (
+                        <span className="px-2 py-0.5 bg-teal-500/20 text-teal-300 font-mono text-[10px] font-bold rounded-md border border-teal-400/30">
+                          {Math.round(facialAnalysis.confidence * 100)}%
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 text-[11px]">
+                      <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                        <Mic className="w-3.5 h-3.5" /> Mic Active
+                      </span>
+                      <span className="flex items-center gap-1 text-slate-300">
+                        <ShieldCheck className="w-3.5 h-3.5 text-teal-400" /> ID Verified
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>

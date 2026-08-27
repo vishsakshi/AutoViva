@@ -12,10 +12,13 @@ class BloomTaxonomy(str, Enum):
     CREATE = "Create"
 
 class QuestionStatus(str, Enum):
-    DRAFT = "draft"
+    GENERATED = "generated"
+    VALIDATED = "validated"
+    FACULTY_REVIEW = "faculty_review"
     APPROVED = "approved"
     REJECTED = "rejected"
     EDITED = "edited"
+    PUBLISHED = "published"
 
 class RubricCriterion(BaseModel):
     criterion: str
@@ -23,19 +26,35 @@ class RubricCriterion(BaseModel):
 
 class VivaQuestionSchema(BaseModel):
     question_id: str
+    document_id: str = ""
+    viva_id: str = ""
+    filename: str = ""
     subject: str
     topic: str
-    difficulty: str = "medium"
+    section: str = ""
+    difficulty: str = "Medium"
     blooms_level: BloomTaxonomy = BloomTaxonomy.UNDERSTAND
-    learning_objective: str
     question_text: str
+    question: str = ""
     ideal_answer: str
-    key_concepts: List[str] = []
-    evaluation_rubric: List[RubricCriterion] = []
+    options: Dict[str, str] = Field(default_factory=dict)
+    correct_answer: str = "A"
+    source_quote: str = ""
+    key_concepts: List[str] = Field(default_factory=list)
+    expected_keywords: List[str] = Field(default_factory=list)
+    evaluation_rubric: List[RubricCriterion] = Field(default_factory=list)
+    rubric: List[Dict[str, Any]] = Field(default_factory=list)
     total_marks: float = 10.0
-    reference_source: str
+    source_page: str = "Page 1"
+    source_section: str = ""
+    source_chunk_ids: List[str] = Field(default_factory=list)
+    reference_source: str = ""
+    confidence: float = 0.90
+    llm_model: str = "gpt-4o-mini"
+    validation_status: str = "VERIFIED"
+    validation_report: Dict[str, Any] = Field(default_factory=dict)
     estimated_answer_time_seconds: int = 120
-    status: QuestionStatus = QuestionStatus.DRAFT
+    status: QuestionStatus = QuestionStatus.FACULTY_REVIEW
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class GenerateQuestionsRequest(BaseModel):
@@ -44,6 +63,8 @@ class GenerateQuestionsRequest(BaseModel):
     difficulty: str = "medium"
     question_count: int = 3
     bloom_level: Optional[BloomTaxonomy] = BloomTaxonomy.UNDERSTAND
+    document_id: Optional[str] = None
+    viva_id: Optional[str] = None
 
 class ReviewActionRequest(BaseModel):
     question_id: str

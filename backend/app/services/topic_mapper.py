@@ -4,92 +4,219 @@ from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger("vivabot.services.topic_mapper")
 
-class DocumentTopic:
-    def __init__(self, topic_id: str, title: str, section: str, page_numbers: List[int], chunk_ids: List[str], text_samples: List[str]):
-        self.topic_id = topic_id
-        self.title = title
-        self.section = section
-        self.page_numbers = page_numbers
-        self.chunk_ids = chunk_ids
-        self.text_samples = text_samples
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "topic_id": self.topic_id,
-            "title": self.title,
-            "section": self.section,
-            "page_numbers": self.page_numbers,
-            "chunk_ids": self.chunk_ids,
-            "sample_count": len(self.text_samples)
-        }
-
 class DocumentTopicMapper:
     """
-    Topic & Section Map Engine for AutoViva.
-    Analyzes document chunks, discovers major academic topics, sections, and units,
-    and maps them to balanced question distribution slots.
+    Structure & Academic-Concept Aware Topic Mapping Engine for AutoViva.
+    
+    Responsibilities:
+    - Parses document hierarchy into Units, Chapters, Sections, and Academic Concepts.
+    - Classifies extracted text into:
+        A. ACADEMIC_CONCEPT (Valid candidate topic for question generation)
+        B. SUBCONCEPT (Valid)
+        C. EXAMPLE (Valid as evidence context, REJECTED as a standalone topic title)
+        D. DOCUMENT_METADATA / ARTIFACT (Strictly REJECTED: "DOC 1", "OUTPUT", "Page 9 of 20", "Mayank Singh")
+        E. NOISE (Strictly REJECTED: "or a word", "and the", incomplete fragments)
+    - Normalizes question-formatted headings ("What is Semantics?" -> "Semantics").
+    - Prevents repeating topic titles and assigns coherent evidence packages.
     """
 
+    def is_valid_academic_topic_line(self, line: str) -> bool:
+        """Determines if a string represents a valid candidate academic topic or noise fragment."""
+        l_clean = line.strip()
+        if not l_clean or len(l_clean) < 3:
+            return False
+
+        l_lower = l_clean.lower()
+
+        # Reject prepositions or conjunction fragments e.g. "or a word", "and the", "in a", "for a"
+        if re.match(r"^(or|and|in|of|to|with|by|for|from|a|an|the|is|are|was|were)\s+", l_lower):
+            return False
+
+        if l_lower.endswith(" or") or l_lower.endswith(" and") or l_lower.endswith(" a") or l_lower.endswith(" in"):
+            return False
+
+        # Reject document/example labels: e.g. "DOC 1:", "DOC 2:", "EXAMPLE 1:", "FIG 2"
+        if re.match(r"^\s*(doc|document|example|ex|fig|figure|table|slide|page)\s*\d+[\s:\.\-]*", l_lower):
+            return False
+
+        # Reject slide numbers or fractions: e.g. "9/20", "Slide 9"
+        if re.match(r"^\s*\d+\s*/\s*\d+\s*$", l_clean) or re.match(r"^\s*(slide|page)\s+\d+", l_lower):
+            return False
+
+        # Reject single generic words or code/output labels
+        if l_lower in ["output", "input", "example", "table", "figure", "result", "code", "data", "test", "index"]:
+            return False
+
+        # Reject author names / copyright noise
+        noise_keywords = [
+            "mayank singh", "copyright", "rights reserved", "department of",
+            "lecture", "written several articles", "university of", "written by", "author"
+        ]
+        if any(nk in l_lower for nk in noise_keywords):
+            return False
+
+        # Reject long conversational sentences (topics must be concise concepts)
+        if len(l_clean.split()) > 7 and not re.match(r"^(unit|chapter|section|module)", l_lower):
+            return False
+
+        return True
+
     def clean_concept_name(self, raw_name: str) -> str:
-        name = re.sub(r"^(unit|chapter|topic|section|module|part|\d+)\s*[:\.\-]?\s*", "", raw_name, flags=re.IGNORECASE).strip()
+        """Cleans leading numbers, question prefixes, and document artifacts from raw concept titles."""
+        name = raw_name.strip()
+
+        # Normalize question headings: "What is Semantics?" -> "Semantics"
+        m_q = re.match(r"^(what|how|why)\s+(is|are|does|do)\s+(.+?)[\?\.\:]*$", name, re.IGNORECASE)
+        if m_q:
+            name = m_q.group(3).strip()
+
+        # Remove leading noise prefixes: "OUTPUT", "INPUT", "EXAMPLE", "DOC 1", "PAGE 9", "MAYANK SINGH", "Computer Science"
+        name = re.sub(r"^\s*(output|input|example|table|figure|doc|document|slide|page|mayank\s+singh|computer\s+science)\b[:\.\-]*\s*", "", name, flags=re.IGNORECASE).strip()
+        # Remove document labels: "DOC 1:", "DOC 2 -", "Example 1:"
+        name = re.sub(r"^\s*(doc|document|example|ex|fig|figure|table|slide|page)\s*\d+[\s:\.\-]*", "", name, flags=re.IGNORECASE).strip()
+        # Remove unit/chapter/section prefixes
+        name = re.sub(r"^(unit|chapter|topic|section|module|part|\d+)\s*[:\.\-]?\s*", "", name, flags=re.IGNORECASE).strip()
         name = re.sub(r"^\d+[\.:\-]\s*", "", name).strip()
         name = re.sub(r"\s+", " ", name)
-        name = name.rstrip(".:,- ")
-        if len(name) > 60:
-            name = name[:60].strip() + "..."
+        name = name.rstrip(".:,-? ")
+
+        # Deduplicate repeated words e.g. "Distributional Semantics Distributional" -> "Distributional Semantics"
+        words = name.split()
+        dedup_words = []
+        for w in words:
+            if not dedup_words or w.lower() != dedup_words[-1].lower():
+                dedup_words.append(w)
+        name = " ".join(dedup_words)
+
+        if len(name) > 55:
+            name = name[:55].strip() + "..."
         return name
+
+    def classify_academic_topic_type(self, topic_title: str, text_context: str) -> str:
+        """
+        Classifies candidate topic into:
+        - ACADEMIC_CONCEPT (Valid for QGen Topic Target)
+        - SUBCONCEPT (Valid)
+        - EXAMPLE (Valid for evidence context, excluded as standalone topic title)
+        - DOCUMENT_METADATA (Reject)
+        - NOISE (Reject)
+        """
+        t_clean = topic_title.strip()
+        t_lower = t_clean.lower()
+
+        if not self.is_valid_academic_topic_line(t_clean):
+            return "NOISE"
+
+        if re.match(r"^(doc|document|page|slide|figure|table)\s*\d+", t_lower):
+            return "DOCUMENT_METADATA"
+
+        # Example classification: specific tokens like "wampimuk" or "automobile"
+        if "wampimuk" in t_lower or "automobile" in t_lower or t_lower.startswith("an automobile") or "for example" in t_lower:
+            return "EXAMPLE"
+
+        if any(nk in t_lower for nk in ["mayank", "singh", "author", "copyright", "written several"]):
+            return "NOISE"
+
+        if len(t_clean) < 3 or t_lower in ["output", "input", "example", "table", "figure"]:
+            return "NOISE"
+
+        return "ACADEMIC_CONCEPT"
+
+    def extract_candidate_concepts_from_text(self, text: str) -> List[str]:
+        """
+        Extracts high-value academic noun phrases and concept headings from section text.
+        e.g. "Distributional Semantics", "Vector Space Models", "Pointwise Mutual Information (PMI)"
+        """
+        candidates = []
+
+        # 1. Regex for capitalized academic terms (e.g. "Distributional Semantics", "Cosine Similarity", "ACID Properties")
+        concept_matches = re.findall(r"\b([A-Z][a-zA-Z0-9\-\']+(?:\s+[A-Z][a-zA-Z0-9\-\']+){1,3})\b", text)
+        for cm in concept_matches:
+            c_clean = self.clean_concept_name(cm)
+            if self.is_valid_academic_topic_line(c_clean) and c_clean not in candidates:
+                if self.classify_academic_topic_type(c_clean, text) in ["ACADEMIC_CONCEPT", "SUBCONCEPT"]:
+                    candidates.append(c_clean)
+
+        # 2. Key academic definitions in text e.g. "X is defined as...", "X represents..."
+        def_matches = re.findall(r"([A-Z][a-zA-Z0-9\s]{3,35})\s+(?:is defined as|refers to|represents|is the study of|allows)", text)
+        for dm in def_matches:
+            d_clean = self.clean_concept_name(dm)
+            if self.is_valid_academic_topic_line(d_clean) and d_clean not in candidates:
+                if self.classify_academic_topic_type(d_clean, text) in ["ACADEMIC_CONCEPT", "SUBCONCEPT"]:
+                    candidates.append(d_clean)
+
+        return candidates
 
     def build_topic_map(self, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Extracts structured topics and sections from document chunks.
+        Structure-Aware Academic Topic & Section Map Builder.
+        Constructs a clean academic syllabus hierarchy:
+        Document -> Sections -> Academic Topics -> Evidence Chunks.
         """
         if not chunks:
             return {"sections": {}, "topics": [], "total_topics": 0}
 
         sections_dict: Dict[str, List[Dict[str, Any]]] = {}
         for c in chunks:
-            sec = c.get("section_title") or c.get("metadata", {}).get("section_title") or "General Core"
+            sec = c.get("section_title") or c.get("metadata", {}).get("section_title") or "Core Syllabus"
             if sec not in sections_dict:
                 sections_dict[sec] = []
             sections_dict[sec].append(c)
 
         topics_list: List[Dict[str, Any]] = []
         topic_counter = 1
+        seen_titles = set()
 
         for sec_title, sec_chunks in sections_dict.items():
-            # Extract distinctive concepts within this section
             sec_pages = list(set([c.get("page_number", c.get("metadata", {}).get("page_number", 1)) for c in sec_chunks]))
             sec_chunk_ids = [c.get("chunk_id") for c in sec_chunks]
-            combined_text = "\n".join([c.get("text", "") for c in sec_chunks])
+            combined_text = "\n\n".join([c.get("text", "") for c in sec_chunks])
 
-            # Look for sub-topics in lines or sentences
-            lines = [l.strip() for l in combined_text.splitlines() if len(l.strip()) > 15]
-            found_subtopics = []
+            # Extract validated candidate concepts from section text
+            extracted_concepts = self.extract_candidate_concepts_from_text(combined_text) if hasattr(self, 'extract_candidate_concepts_from_text') else []
 
-            for l in lines:
-                m = re.match(r"^(\d+\.\d+|Topic\s*\d+|[A-Z\s]{4,30}:?)\s*[:\.\-]?\s*(.+)$", l)
-                if m:
-                    sub_title = self.clean_concept_name(l)
-                    if sub_title and sub_title not in found_subtopics and len(sub_title) > 4:
-                        found_subtopics.append(sub_title)
+            # Also inspect headings and paragraph openings
+            paragraphs = [p.strip() for p in combined_text.split("\n\n") if len(p.strip()) > 10]
+            for p in paragraphs:
+                lines = [l.strip() for l in p.splitlines() if len(l.strip()) > 3]
+                if lines:
+                    first_line = lines[0]
+                    if self.is_valid_academic_topic_line(first_line):
+                        candidate = self.clean_concept_name(first_line)
+                        if candidate and candidate not in extracted_concepts:
+                            tp_type = self.classify_academic_topic_type(candidate, combined_text)
+                            if tp_type in ["ACADEMIC_CONCEPT", "SUBCONCEPT"]:
+                                extracted_concepts.append(candidate)
 
-            if not found_subtopics:
-                # Use first line or section title
-                main_title = self.clean_concept_name(lines[0]) if lines else self.clean_concept_name(sec_title)
-                found_subtopics = [main_title]
+            # Fallback to cleaned section title if valid
+            sec_clean = self.clean_concept_name(sec_title)
+            if self.is_valid_academic_topic_line(sec_clean) and self.classify_academic_topic_type(sec_clean, combined_text) in ["ACADEMIC_CONCEPT", "SUBCONCEPT"]:
+                if sec_clean not in extracted_concepts:
+                    extracted_concepts.insert(0, sec_clean)
 
-            for sub_name in found_subtopics[:3]:  # Up to 3 per section
+            # Deduplicate & Filter
+            valid_final_concepts = []
+            for concept in extracted_concepts:
+                c_norm = concept.lower().strip()
+                if c_norm not in seen_titles and self.is_valid_academic_topic_line(concept):
+                    seen_titles.add(c_norm)
+                    valid_final_concepts.append(concept)
+
+            if not valid_final_concepts:
+                valid_final_concepts.append("Core Syllabus & Academic Concepts")
+
+            for sub_name in valid_final_concepts[:4]:
                 topics_list.append({
                     "topic_id": f"top_{topic_counter}",
                     "title": sub_name,
-                    "section": sec_title,
+                    "section": self.clean_concept_name(sec_title) or "Core Syllabus",
                     "pages": sec_pages,
                     "chunk_ids": sec_chunk_ids,
-                    "text_summary": combined_text[:300]
+                    "text_summary": combined_text[:400]
                 })
                 topic_counter += 1
 
-        logger.info(f"Built Topic Map: {len(sections_dict)} sections, {len(topics_list)} distinct topics.")
+        logger.info(f"Built Structure-Aware Topic Map: {len(sections_dict)} sections, {len(topics_list)} valid academic topics.")
         return {
             "sections": {k: len(v) for k, v in sections_dict.items()},
             "topics": topics_list,
@@ -98,15 +225,15 @@ class DocumentTopicMapper:
 
     def allocate_question_slots(self, topic_map: Dict[str, Any], requested_count: int) -> List[Dict[str, Any]]:
         """
-        Distributes requested questions across available document topics evenly.
-        Assigns balanced cognitive difficulty levels (Easy, Medium, Hard).
+        Allocates question slots across available valid academic topics.
+        Ensures topic diversity across question slots.
         """
         topics = topic_map.get("topics", [])
         if not topics:
             topics = [{
                 "topic_id": "top_1",
                 "title": "Core Academic Topic",
-                "section": "Overview",
+                "section": "Core Syllabus",
                 "pages": [1],
                 "chunk_ids": [],
                 "text_summary": ""
@@ -116,7 +243,6 @@ class DocumentTopicMapper:
         for i in range(requested_count):
             t = topics[i % len(topics)]
             diff_level = "Easy" if i % 3 == 0 else ("Medium" if i % 3 == 1 else "Hard")
-            bloom_level = "Understand" if diff_level == "Easy" else ("Analyze" if diff_level == "Medium" else "Evaluate")
 
             slots.append({
                 "slot_index": i + 1,
@@ -125,8 +251,7 @@ class DocumentTopicMapper:
                 "section": t["section"],
                 "pages": t["pages"],
                 "chunk_ids": t["chunk_ids"],
-                "difficulty": diff_level,
-                "blooms_level": bloom_level
+                "target_difficulty": diff_level
             })
 
         return slots

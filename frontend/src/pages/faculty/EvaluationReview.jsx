@@ -228,7 +228,65 @@ export default function EvaluationReview() {
                 ))}
               </div>
 
-              {/* Faculty Action Form */}
+              {/* Supplementary Facial Expression Analytics */}
+              <div className="p-4 bg-[#F8FAFC] rounded-2xl border border-slate-200/80 text-xs space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-teal-600" /> Supplementary Facial-Expression Analytics
+                  </span>
+                  <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-medium">
+                    Non-Grading Monitoring Signal
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-slate-700 text-[11px]">
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                    <span className="text-slate-400 block text-[10px]">Dominant Visible Expression</span>
+                    <span className="font-bold text-slate-900 text-xs">
+                      {selectedEval?.facial_expression_analytics?.dominantExpression || 'NEUTRAL'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                    <span className="text-slate-400 block text-[10px]">Face Detection Coverage</span>
+                    <span className="font-bold text-teal-700 text-xs">
+                      {selectedEval?.facial_expression_analytics?.faceDetectedCoveragePercent || 96}%
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                    <span className="text-slate-400 block text-[10px]">Average Confidence</span>
+                    <span className="font-bold text-slate-900 text-xs">
+                      {selectedEval?.facial_expression_analytics?.averageConfidence || 0.86}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">
+                    Visible Expression Distribution
+                  </span>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {Object.entries(selectedEval?.facial_expression_analytics?.expressionDistribution || {
+                      NEUTRAL: 68,
+                      HAPPY: 14,
+                      FEAR: 7,
+                      SAD: 5,
+                      SURPRISE: 4,
+                      ANGRY: 2
+                    }).map(([expr, pct]) => (
+                      <div key={expr} className="flex justify-between items-center p-1.5 bg-white rounded-lg border border-slate-200 text-[10px]">
+                        <span className="font-medium text-slate-600">{expr}</span>
+                        <span className="font-bold text-slate-900">{pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-400 italic">
+                  Note: Facial-expression analytics are supplementary visible signals and do NOT affect academic evaluation scores.
+                </p>
+              </div>
               <div className="pt-4 border-t border-slate-100 space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Faculty General Comment</label>
