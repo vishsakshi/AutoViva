@@ -43,6 +43,15 @@ class DocumentTopicMapper:
         if re.match(r"^\s*\d+\s*/\s*\d+\s*$", l_clean) or re.match(r"^\s*(slide|page)\s+\d+", l_lower):
             return False
 
+        # Reject structural non-academic navigation headings
+        structural_headers = [
+            "introduction & overview", "introduction", "overview", "table of contents",
+            "contents", "agenda", "summary", "conclusion", "references", "bibliography",
+            "course overview", "syllabus overview", "index", "preface", "acknowledgements"
+        ]
+        if l_lower in structural_headers or any(l_lower == sh for sh in structural_headers):
+            return False
+
         # Reject single generic words or code/output labels
         if l_lower in ["output", "input", "example", "table", "figure", "result", "code", "data", "test", "index"]:
             return False
@@ -87,6 +96,13 @@ class DocumentTopicMapper:
             if not dedup_words or w.lower() != dedup_words[-1].lower():
                 dedup_words.append(w)
         name = " ".join(dedup_words)
+
+        # Deduplicate repeated multi-word phrases (e.g. "Distributional Semantics Distributional Semantics" -> "Distributional Semantics")
+        parts = name.split()
+        if len(parts) >= 4:
+            half = len(parts) // 2
+            if [p.lower() for p in parts[:half]] == [p.lower() for p in parts[half:2*half]]:
+                name = " ".join(parts[:half])
 
         if len(name) > 55:
             name = name[:55].strip() + "..."

@@ -86,7 +86,7 @@ class DocumentProcessor:
         pages_data = []
         doc = fitz.open(stream=file_bytes, filetype="pdf")
 
-        current_section = "Introduction & Overview"
+        current_section = "Core Syllabus Content"
 
         for page_idx, page in enumerate(doc):
             text = page.get_text("text").strip()
@@ -96,12 +96,19 @@ class DocumentProcessor:
                 page_sections = []
 
                 for line in raw_lines:
-                    if self.clean_academic_line(line):
-                        header = self.detect_section_header(line)
+                    line_str = line.strip()
+                    if self.clean_academic_line(line_str):
+                        header = self.detect_section_header(line_str)
                         if header:
                             current_section = header
                             page_sections.append(header)
-                        cleaned_lines.append(line.strip())
+                            if not cleaned_lines or cleaned_lines[-1].lower() != line_str.lower():
+                                cleaned_lines.append(line_str)
+                        else:
+                            # Skip line if it duplicates current section title or preceding line
+                            if cleaned_lines and (line_str.lower() == cleaned_lines[-1].lower() or line_str.lower() == current_section.lower()):
+                                continue
+                            cleaned_lines.append(line_str)
 
                 cleaned_text = "\n".join(cleaned_lines)
                 if cleaned_text:

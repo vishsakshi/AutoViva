@@ -87,6 +87,11 @@ class LLMService:
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
+        # Safe Diagnostic Logging (API Key Redacted)
+        redacted_key = f"{self.api_key[:6]}...{self.api_key[-4:]}" if len(self.api_key) > 10 else "***"
+        logger.info(f"[LLM CONFIG] provider={self.provider} | model={self.model} | api_url={self.api_url} | api_key={redacted_key}")
+        logger.info(f"[LLM CALL] request_started=true | endpoint={url} | json_mode={json_mode}")
+
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 resp = client.post(url, json=payload, headers=headers)
@@ -94,13 +99,16 @@ class LLMService:
                     data = resp.json()
                     raw_content = data["choices"][0]["message"]["content"]
                     parsed = self._extract_json_from_response(raw_content)
+                    logger.info(f"[LLM RESPONSE] success=true | model={self.model} | response_length={len(raw_content)}")
                     return True, raw_content, parsed
                 else:
-                    logger.warning(f"LLM API returned HTTP {resp.status_code}: {resp.text}")
-                    return False, f"HTTP_{resp.status_code}: {resp.text}", None
+                    err_msg = f"HTTP_{resp.status_code}: {resp.text[:200]}"
+                    logger.warning(f"[LLM RESPONSE] success=false | model={self.model} | error={err_msg}")
+                    return False, err_msg, None
         except Exception as e:
-            logger.warning(f"LLM API request error: {e}")
-            return False, str(e), None
+            err_msg = f"API_ERROR: {str(e)}"
+            logger.warning(f"[LLM RESPONSE] success=false | model={self.model} | error={err_msg}")
+            return False, err_msg, None
 
     # =========================================================================
     # STEP 6: NATURAL ACADEMIC VIVA QUESTION GENERATION FROM EVIDENCE

@@ -132,6 +132,20 @@ class DocumentChunker:
             )
             all_chunks.extend(page_chunks)
         logger.info(f"Generated {len(all_chunks)} chunks for document '{document_id}' ({len(pages_data)} pages, subject '{subject}').")
+        self.print_chunk_debug_summary(all_chunks)
         return all_chunks
+
+    def print_chunk_debug_summary(self, chunks: List[Dict[str, Any]]):
+        """Debug helper to print structured chunk metadata and text preview."""
+        print("\n" + "=" * 80)
+        print(f"CHUNK DEBUG SUMMARY ({len(chunks)} Chunks Extracted)")
+        print("=" * 80)
+        for idx, c in enumerate(chunks[:10]):
+            meta = c.get("metadata", {})
+            txt = c.get("text", "")
+            preview = txt[:120].replace("\n", " ") + ("..." if len(txt) > 120 else "")
+            print(f"CHUNK ID: {c.get('chunk_id')} | PAGE: {meta.get('page_number')} | SECTION: {meta.get('section_title')}")
+            print(f"TEXT: \"{preview}\"")
+            print("-" * 80)
 
 document_chunker = DocumentChunker()
