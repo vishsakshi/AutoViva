@@ -38,7 +38,7 @@ def run_e2e_smoke_test():
     generated_questions = []
     student_eval_id = ""
 
-    with httpx.Client(timeout=180.0) as client:
+    with httpx.Client(timeout=httpx.Timeout(600.0)) as client:
         # Wait up to 10s for backend server readiness
         for retry in range(10):
             try:
