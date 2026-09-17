@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Mic, BookOpen, Clock, Award, CheckCircle2, ArrowRight, ShieldCheck, HelpCircle } from 'lucide-react';
+import { getApiUrl } from '../../services/api';
 
 export default function StudentDashboard() {
   const [publishedVivas, setPublishedVivas] = useState([]);
@@ -8,7 +9,7 @@ export default function StudentDashboard() {
   useEffect(() => {
     const fetchPublished = async () => {
       try {
-        const res = await fetch('/api/viva/published');
+        const res = await fetch(getApiUrl('/api/viva/published'));
         if (res.ok) {
           const data = await res.json();
           setPublishedVivas(data || []);

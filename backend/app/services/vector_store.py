@@ -11,8 +11,9 @@ class VectorStore:
     ChromaDB Vector Database manager with strict document and viva isolation.
     Ensures that question generation only ever retrieves chunks from the specific uploaded document.
     """
-    def __init__(self, persist_directory: str = "data/vector_store", collection_name: str = "vivabot_knowledge"):
-        self.persist_directory = persist_directory
+    def __init__(self, persist_directory: Optional[str] = None, collection_name: str = "vivabot_knowledge"):
+        from app.core.config import settings
+        self.persist_directory = persist_directory or getattr(settings, "CHROMA_PERSIST_DIR", "data/vector_store")
         self.collection_name = collection_name
         os.makedirs(self.persist_directory, exist_ok=True)
         

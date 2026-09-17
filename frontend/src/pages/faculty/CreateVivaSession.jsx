@@ -4,6 +4,7 @@ import {
   Sparkles, Upload, FileText, CheckCircle2, XCircle, Edit3, ArrowLeft, ArrowRight,
   Layers, Send, Loader2, RefreshCw, Trash2, Eye, FileCode, AlertCircle, Info, RotateCcw
 } from 'lucide-react';
+import { getApiUrl } from '../../services/api';
 
 export default function CreateVivaSession() {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ export default function CreateVivaSession() {
     setToast(null);
 
     try {
-      const res = await fetch('/api/viva/create', {
+      const res = await fetch(getApiUrl('/api/viva/create'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,7 +117,7 @@ export default function CreateVivaSession() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/viva/upload-document', {
+      const res = await fetch(getApiUrl('/api/viva/upload-document'), {
         method: 'POST',
         body: formData
       });
@@ -195,7 +196,7 @@ export default function CreateVivaSession() {
     setToast(null);
 
     try {
-      const res = await fetch(`/api/viva/${vivaRecord.viva_id}/generate-questions`, {
+      const res = await fetch(getApiUrl(`/api/viva/${vivaRecord.viva_id}/generate-questions`), {
         method: 'POST'
       });
 
@@ -227,7 +228,7 @@ export default function CreateVivaSession() {
     }
 
     try {
-      const res = await fetch(`/api/viva/${vivaRecord.viva_id}/review-question`, {
+      const res = await fetch(getApiUrl(`/api/viva/${vivaRecord.viva_id}/review-question`), {
         method: 'POST',
         body: formData
       });
@@ -248,7 +249,7 @@ export default function CreateVivaSession() {
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/viva/${vivaRecord.viva_id}/publish`, {
+      const res = await fetch(getApiUrl(`/api/viva/${vivaRecord.viva_id}/publish`), {
         method: 'POST'
       });
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FileCheck, ArrowLeft, CheckCircle2, Edit3, ShieldCheck, AlertTriangle, Layers, UserCheck } from 'lucide-react';
+import { getApiUrl } from '../../services/api';
 
 export default function EvaluationReview() {
   const [evaluations, setEvaluations] = useState([]);
@@ -14,7 +15,7 @@ export default function EvaluationReview() {
 
   const fetchEvaluations = async () => {
     try {
-      const res = await fetch('/api/evaluation/all').catch(() => fetch('http://localhost:8000/api/evaluation/all'));
+      const res = await fetch(getApiUrl('/api/evaluation/all'));
       if (res.ok) {
         const data = await res.json();
         setEvaluations(data || []);
@@ -59,7 +60,7 @@ export default function EvaluationReview() {
     if (!selectedEval) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/evaluation/${selectedEval.evaluation_id}/approve?comment=${encodeURIComponent(comment)}`, {
+      const res = await fetch(getApiUrl(`/api/evaluation/${selectedEval.evaluation_id}/approve?comment=${encodeURIComponent(comment)}`), {
         method: 'POST'
       });
       if (res.ok) {
@@ -80,7 +81,7 @@ export default function EvaluationReview() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/evaluation/${selectedEval.evaluation_id}/override`, {
+      const res = await fetch(getApiUrl(`/api/evaluation/${selectedEval.evaluation_id}/override`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

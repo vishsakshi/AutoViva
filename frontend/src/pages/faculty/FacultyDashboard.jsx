@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, FileCheck, ArrowRight, PlusCircle, Trash2, BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
+import { getApiUrl } from '../../services/api';
 
 export default function FacultyDashboard() {
   const [publishedVivas, setPublishedVivas] = useState([]);
@@ -12,7 +13,7 @@ export default function FacultyDashboard() {
   const fetchPublishedVivas = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/viva/published');
+      const res = await fetch(getApiUrl('/api/viva/published'));
       if (res.ok) {
         const data = await res.json();
         setPublishedVivas(data || []);
@@ -40,7 +41,7 @@ export default function FacultyDashboard() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const res = await fetch(`/api/viva/${vivaId}`, {
+      const res = await fetch(getApiUrl(`/api/viva/${vivaId}`), {
         method: 'DELETE',
         headers
       });

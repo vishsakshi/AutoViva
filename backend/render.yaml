@@ -1,0 +1,38 @@
+# Render Production Deployment Manifest for AutoViva Backend
+services:
+  - type: web
+    name: autoviva-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/health
+    disk:
+      name: chroma-vector-storage
+      mountPath: /app/data/vector_store
+      sizeGB: 10
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PROJECT_NAME
+        value: AutoViva API
+      - key: LLM_PROVIDER
+        value: openai_compatible
+      - key: LLM_MODEL
+        value: qwen2.5:3b
+      - key: LLM_TEMPERATURE
+        value: "0.2"
+      - key: LLM_TIMEOUT_SECONDS
+        value: "300"
+      - key: CHROMA_PERSIST_DIR
+        value: /app/data/vector_store
+      - key: MONGO_URI
+        sync: false
+      - key: LLM_API_URL
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, UserCheck, ArrowRight, Lock, Sparkles, GraduationCap, Briefcase, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import {
+  Sparkles, ShieldCheck, UserCheck, Lock, Mail, User, BookOpen, CheckCircle2, AlertCircle, ArrowRight, Loader2, GraduationCap, Briefcase
+} from 'lucide-react';
+import { getApiUrl } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -62,7 +65,7 @@ export default function Login() {
     console.log("[AutoViva Login Request Payload]:", payload);
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -117,7 +120,7 @@ export default function Login() {
     console.log("[AutoViva Register Request Payload]:", payload);
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(getApiUrl('/api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

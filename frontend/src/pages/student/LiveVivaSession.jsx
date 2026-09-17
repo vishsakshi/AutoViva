@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { getApiUrl } from '../../services/api';
 import {
   Mic,
   MicOff,
@@ -323,7 +324,7 @@ export default function LiveVivaSession() {
         const formData = new FormData();
         formData.append('file', audioBlob, 'viva_answer.webm');
 
-        const res = await fetch('/api/viva/transcribe', {
+        const res = await fetch(getApiUrl('/api/viva/transcribe'), {
           method: 'POST',
           body: formData
         }).catch(() => null);
@@ -357,7 +358,7 @@ export default function LiveVivaSession() {
     setExaminerState('AI_PROCESSING');
 
     try {
-      const res = await fetch('/api/evaluation/submit', {
+      const res = await fetch(getApiUrl('/api/evaluation/submit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

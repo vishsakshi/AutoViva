@@ -52,15 +52,12 @@ app = FastAPI(
 )
 
 # CORS Configuration
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-]
+raw_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+origins = list(set(raw_origins + ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"]))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"] if "*" in origins or settings.ENVIRONMENT == "production" else origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
