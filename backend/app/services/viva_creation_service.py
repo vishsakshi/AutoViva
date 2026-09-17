@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.services.knowledge_service import knowledge_service
+from app.services.vector_store import vector_store
 from app.services.question_generator import question_generator_engine
 from app.models.question_gen import VivaQuestionSchema
 
@@ -183,12 +184,47 @@ class VivaCreationService:
 
     def get_published_vivas(self) -> List[VivaSessionRecord]:
         if self.sessions_col is not None:
-            docs = list(self.sessions_col.find({"$or": [{"status": "PUBLISHED"}, {"approved_questions.0": {"$exists": True}}]}))
-            results = []
-            for d in docs:
-                d.pop("_id", None)
-                results.append(VivaSessionRecord(**d))
-            return results
+            try:
+                docs = list(self.sessions_col.find({"$or": [{"status": "PUBLISHED"}, {"approved_questions.0": {"$exists": True}}]}))
+                results = []
+                for d in docs:
+                    d.pop("_id", None)
+                    results.append(VivaSessionRecord(**d))
+                return results
+            except Exception as e:
+                logger.error(f"Error reading published vivas from MongoDB: {e}")
+
         return [v for v in viva_sessions_db.values() if v.status == "PUBLISHED" or len(v.approved_questions) > 0]
+    def delete_viva(self, viva_id: str) -> Dict[str, Any]:
+        record = self.get_viva(viva_id)
+        if not record:
+            raise ValueError(f"Viva session '{viva_id}' not found.")
+
+        doc_id = record.document_id
+
+        # 1. Remove from in-memory dictionary
+        if viva_id in viva_sessions_db:
+            del viva_sessions_db[viva_id]
+
+        # 2. Remove from MongoDB
+        mongo_deleted = False
+        if self.sessions_col is not None:
+            res = self.sessions_col.delete_one({"viva_id": viva_id})
+            mongo_deleted = res.deleted_count > 0
+
+        # 3. Clean up associated vector embeddings in ChromaDB if document_id exists
+        chunks_deleted = 0
+        if doc_id:
+            chunks_deleted = vector_store.delete_document_chunks(doc_id)
+
+        logger.info(f"[VIVA DELETED] Session: '{viva_id}', DocID: '{doc_id}', Chunks Cleaned: {chunks_deleted}")
+        return {
+            "status": "SUCCESS",
+            "message": f"Successfully deleted viva session '{viva_id}'.",
+            "viva_id": viva_id,
+            "document_id": doc_id,
+            "mongo_deleted": mongo_deleted,
+            "vector_chunks_deleted": chunks_deleted
+        }
 
 viva_creation_service = VivaCreationService()

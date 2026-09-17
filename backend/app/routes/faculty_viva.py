@@ -1,5 +1,5 @@
 import time
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Header
 from typing import Optional, List
 
 from app.services.viva_creation_service import (
@@ -8,6 +8,7 @@ from app.services.viva_creation_service import (
     VivaSessionRecord
 )
 from app.services.knowledge_service import knowledge_service
+from app.services.auth_service import auth_service
 
 router = APIRouter(prefix="/viva", tags=["Faculty Viva Pipeline"])
 
@@ -96,3 +97,24 @@ def get_published_vivas():
 @router.get("/all", response_model=List[VivaSessionRecord])
 def get_all_vivas():
     return list(viva_creation_service.viva_sessions_db.values())
+
+@router.delete("/{viva_id}")
+def delete_viva(viva_id: str, authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized: Missing or invalid authorization header.")
+    
+    token = authorization.split(" ")[1]
+    decoded = auth_service.decode_token(token)
+    if not decoded:
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid or expired access token.")
+
+    if decoded.get("role") != "faculty":
+        raise HTTPException(status_code=403, detail="Forbidden: Only faculty members can delete published examinations.")
+
+    try:
+        res = viva_creation_service.delete_viva(viva_id)
+        return res
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete viva session: {str(e)}")

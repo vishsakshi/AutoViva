@@ -1,6 +1,22 @@
 import os
+from pathlib import Path
 from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
+
+# Resolve absolute path to .env file regardless of current working directory
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+env_candidates = [
+    BASE_DIR / ".env",
+    BASE_DIR / "backend" / ".env",
+    Path("backend/.env"),
+    Path(".env")
+]
+
+selected_env_file = ".env"
+for candidate in env_candidates:
+    if candidate.exists():
+        selected_env_file = str(candidate)
+        break
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AutoViva API"
@@ -20,13 +36,13 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai_compatible")
     LLM_API_URL: str = os.getenv("LLM_API_URL", "https://api.openai.com/v1")
     LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "qwen2.5:3b")
     LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
     LLM_TIMEOUT_SECONDS: int = int(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
     
     # Environment
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 
-    model_config = ConfigDict(env_file=".env", extra="ignore")
+    model_config = ConfigDict(env_file=selected_env_file, extra="ignore")
 
 settings = Settings()

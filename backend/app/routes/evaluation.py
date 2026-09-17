@@ -71,6 +71,8 @@ async def submit_evaluation_pipeline(req: EvaluateAnswerRequest):
     try:
         record = evaluation_review_service.submit_student_answer_pipeline(req)
         return record
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Pipeline execution failed: {str(e)}")
 

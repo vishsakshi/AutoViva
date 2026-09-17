@@ -32,6 +32,14 @@ class DocumentProcessor:
         if re.match(r"^\s*-\s*\d+\s*-\s*$", line_clean):
             return False
 
+        # Document labels / example artifacts / single noise words: e.g. "DOC 1:", "OUTPUT", "or a word"
+        if re.match(r"^\s*(doc|document|example|fig|figure|table|slide|page)\s*\d+[\s:\.\-]*", line_clean, re.IGNORECASE):
+            return False
+        if line_clean.lower() in ["output", "input", "example", "table", "figure", "result", "code", "data", "test", "index"]:
+            return False
+        if re.match(r"^(or|and|in|of|to|with|by|for|from)\s+[a-z]{1,4}\s+[a-z]{1,8}$", line_clean, re.IGNORECASE):
+            return False
+
         # Common author / copyright / institute noise patterns
         noise_patterns = [
             r"(?i)mayank\s+singh",
@@ -57,12 +65,18 @@ class DocumentProcessor:
         line_clean = line.strip()
         l_lower = line_clean.lower()
 
-        # Reject document/example labels, author names, single noise words
-        if re.match(r"^\s*(doc|document|example|fig|figure|table|slide|page)\s*\d+[\s:\.\-]", l_lower):
+        # Generic metadata, citation, email, and document artifact detection across domains
+        if re.search(r"[\w\.-]+@[\w\.-]+\.\w+", line_clean) or re.search(r"\b(doi|isbn|issn|http|https|www)\b", l_lower):
             return ""
-        if l_lower in ["output", "input", "example", "table", "figure", "overview", "introduction"]:
+        if re.search(r"^\s*(doc|document|example|fig|figure|table|slide|page)\s*\d+[\s:\.\-]", l_lower):
             return ""
-        if any(nk in l_lower for nk in ["mayank singh", "copyright", "rights reserved", "written by"]):
+        if re.search(r"^\s*\d+\s*(of|/)\s*\d+\s*$", line_clean) or re.search(r"^\s*(copyright|all rights reserved|published by|printed in)\b", l_lower):
+            return ""
+
+        # Generic structural words: skip if line is purely structural metadata
+        structural_terms = {"output", "input", "example", "table", "figure", "overview", "introduction", "content", "contents", "syllabus", "extracted", "presentation"}
+        line_words = set(re.findall(r"\b[a-zA-Z]{3,}\b", l_lower))
+        if line_words and line_words.issubset(structural_terms):
             return ""
 
         # Check for explicit heading keywords or numbering
@@ -75,7 +89,7 @@ class DocumentProcessor:
             if m:
                 return line_clean
 
-        # All-caps short header check (must contain at least 2 words or a known academic term, e.g. "DISTRIBUTIONAL SEMANTICS")
+        # All-caps short header check
         if re.match(r"^([A-Z\s]{5,40})$", line_clean) and len(line_clean.split()) >= 2:
             return line_clean
 
@@ -86,7 +100,7 @@ class DocumentProcessor:
         pages_data = []
         doc = fitz.open(stream=file_bytes, filetype="pdf")
 
-        current_section = "Core Syllabus Content"
+        current_section = "Academic Content"
 
         for page_idx, page in enumerate(doc):
             text = page.get_text("text").strip()
@@ -129,7 +143,7 @@ class DocumentProcessor:
         logger.info(f"Extracting clean text from PPTX '{filename}'...")
         slides_data = []
         prs = Presentation(io.BytesIO(file_bytes))
-        current_section = "Slide Presentation"
+        current_section = "Academic Presentation"
 
         for slide_idx, slide in enumerate(prs.slides):
             slide_texts = []
@@ -189,15 +203,52 @@ class DocumentProcessor:
             "detected_sections": sections_found or [current_sec]
         }]
 
+    def process_docx(self, file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
+        logger.info(f"Extracting clean text from DOCX '{filename}'...")
+        lines = []
+        try:
+            import zipfile
+            import xml.etree.ElementTree as ET
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+                xml_content = z.read('word/document.xml')
+                tree = ET.fromstring(xml_content)
+                text_elems = tree.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
+                lines = [t.text.strip() for t in text_elems if t.text and t.text.strip()]
+        except Exception as e:
+            text_content = file_bytes.decode("utf-8", errors="ignore").strip()
+            lines = [l.strip() for l in text_content.splitlines() if l.strip()]
+
+        cleaned_lines = [l for l in lines if self.clean_academic_line(l)]
+        cleaned_text = "\n".join(cleaned_lines)
+        return [{
+            "page_number": 1,
+            "text": cleaned_text,
+            "source_file": filename,
+            "file_type": "docx",
+            "section_title": "Academic Document",
+            "detected_sections": ["Academic Document"]
+        }]
+
     def extract_document(self, file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
         ext = filename.split(".")[-1].lower() if "." in filename else ""
         if ext == "pdf":
-            return self.process_pdf(file_bytes, filename)
+            pages_data = self.process_pdf(file_bytes, filename)
         elif ext in ["pptx", "ppt"]:
-            return self.process_pptx(file_bytes, filename)
-        elif ext in ["txt", "md", "docx"]:
-            return self.process_txt(file_bytes, filename)
+            pages_data = self.process_pptx(file_bytes, filename)
+        elif ext == "docx":
+            pages_data = self.process_docx(file_bytes, filename)
+        elif ext in ["txt", "md"]:
+            pages_data = self.process_txt(file_bytes, filename)
         else:
             raise ValueError(f"Unsupported file extension '.{ext}'. Supported: .pdf, .pptx, .txt, .md, .docx")
+
+        total_extracted_len = sum(len(p.get("text", "").strip()) for p in pages_data)
+        if not pages_data or total_extracted_len < 100:
+            raise ValueError(
+                f"INSUFFICIENT_DOCUMENT_TEXT: Insufficient readable academic text extracted from '{filename}' ({total_extracted_len} characters found). "
+                "The file may be a scanned image-only PDF, empty, or unreadable binary."
+            )
+
+        return pages_data
 
 document_processor = DocumentProcessor()

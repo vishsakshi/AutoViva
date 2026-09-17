@@ -43,25 +43,28 @@ class DocumentTopicMapper:
         if re.match(r"^\s*\d+\s*/\s*\d+\s*$", l_clean) or re.match(r"^\s*(slide|page)\s+\d+", l_lower):
             return False
 
-        # Reject structural non-academic navigation headings
-        structural_headers = [
-            "introduction & overview", "introduction", "overview", "table of contents",
-            "contents", "agenda", "summary", "conclusion", "references", "bibliography",
-            "course overview", "syllabus overview", "index", "preface", "acknowledgements"
-        ]
-        if l_lower in structural_headers or any(l_lower == sh for sh in structural_headers):
+        # Generic structural and metadata term set
+        structural_terms = {
+            "content", "contents", "syllabus", "extracted", "document", "presentation", "slide", "slides",
+            "section", "chapter", "unit", "module", "part", "overview", "summary", "introduction",
+            "index", "table", "figure", "fig", "example", "ex", "output", "input", "data", "result",
+            "references", "bibliography", "citation", "appendix", "preface", "acknowledgements",
+            "copyright", "rights", "reserved", "published", "publisher", "author", "authors",
+            "department", "faculty", "university", "institute", "school", "college",
+            "lecture", "lectures", "note", "notes", "course", "courses", "instructor", "instructors",
+            "professor", "professors", "prof", "dr", "written", "edited", "page", "pages", "cs224n"
+        }
+
+        words = set(re.findall(r"\b[a-zA-Z]{2,}\b", l_lower))
+        if words and words.intersection(structural_terms):
             return False
 
-        # Reject single generic words or code/output labels
-        if l_lower in ["output", "input", "example", "table", "figure", "result", "code", "data", "test", "index"]:
+        # Reject URLs, emails, dates, or publication metadata headers
+        if re.search(r"[\w\.-]+@[\w\.-]+\.\w+", l_clean) or re.search(r"\b(doi|isbn|issn|http|https|www)\b", l_lower):
             return False
 
-        # Reject author names / copyright noise
-        noise_keywords = [
-            "mayank singh", "copyright", "rights reserved", "department of",
-            "lecture", "written several articles", "university of", "written by", "author"
-        ]
-        if any(nk in l_lower for nk in noise_keywords):
+        # Reject author names, instructor details, or lecture note header attributions
+        if re.search(r"\b(prof|professor|dr|instructor|instructors|lecture\s+notes|notes\s+by|written\s+by|edited\s+by|authored\s+by|course\s+instructors)\b", l_lower):
             return False
 
         # Reject long conversational sentences (topics must be concise concepts)
@@ -79,13 +82,16 @@ class DocumentTopicMapper:
         if m_q:
             name = m_q.group(3).strip()
 
-        # Remove leading noise prefixes: "OUTPUT", "INPUT", "EXAMPLE", "DOC 1", "PAGE 9", "MAYANK SINGH", "Computer Science"
-        name = re.sub(r"^\s*(output|input|example|table|figure|doc|document|slide|page|mayank\s+singh|computer\s+science)\b[:\.\-]*\s*", "", name, flags=re.IGNORECASE).strip()
-        # Remove document labels: "DOC 1:", "DOC 2 -", "Example 1:"
+        # Remove leading noise prefixes: "OUTPUT", "INPUT", "EXAMPLE", "DOC 1", "PAGE 9"
+        name = re.sub(r"^\s*(output|input|example|table|figure|doc|document|slide|page)\b[:\.\-]*\s*", "", name, flags=re.IGNORECASE).strip()
         name = re.sub(r"^\s*(doc|document|example|ex|fig|figure|table|slide|page)\s*\d+[\s:\.\-]*", "", name, flags=re.IGNORECASE).strip()
-        # Remove unit/chapter/section prefixes
         name = re.sub(r"^(unit|chapter|topic|section|module|part|\d+)\s*[:\.\-]?\s*", "", name, flags=re.IGNORECASE).strip()
         name = re.sub(r"^\d+[\.:\-]\s*", "", name).strip()
+
+        # Remove leading structural/overview introductory phrases
+        name = re.sub(r"^\s*(introduction\s+to|overview\s+of|basics\s+of|fundamentals\s+of|principles\s+of|notes\s+on|guide\s+to)\s+", "", name, flags=re.IGNORECASE).strip()
+        name = re.sub(r"\s+\b(overview|notes|guide|lecture|lectures|course|courses)\b", "", name, flags=re.IGNORECASE).strip()
+
         name = re.sub(r"\s+", " ", name)
         name = name.rstrip(".:,-? ")
 
@@ -95,9 +101,12 @@ class DocumentTopicMapper:
         for w in words:
             if not dedup_words or w.lower() != dedup_words[-1].lower():
                 dedup_words.append(w)
+
+        if len(dedup_words) >= 3 and dedup_words[0].lower() == dedup_words[-1].lower():
+            dedup_words.pop()
+
         name = " ".join(dedup_words)
 
-        # Deduplicate repeated multi-word phrases (e.g. "Distributional Semantics Distributional Semantics" -> "Distributional Semantics")
         parts = name.split()
         if len(parts) >= 4:
             half = len(parts) // 2
@@ -126,15 +135,11 @@ class DocumentTopicMapper:
         if re.match(r"^(doc|document|page|slide|figure|table)\s*\d+", t_lower):
             return "DOCUMENT_METADATA"
 
-        # Example classification: specific tokens like "wampimuk" or "automobile"
-        if "wampimuk" in t_lower or "automobile" in t_lower or t_lower.startswith("an automobile") or "for example" in t_lower:
-            return "EXAMPLE"
-
-        if any(nk in t_lower for nk in ["mayank", "singh", "author", "copyright", "written several"]):
-            return "NOISE"
-
-        if len(t_clean) < 3 or t_lower in ["output", "input", "example", "table", "figure"]:
-            return "NOISE"
+        # Check if topic title contains structural or metadata terms
+        structural_terms = {"content", "contents", "syllabus", "extracted", "document", "presentation", "slide", "slides", "section", "chapter", "unit", "overview", "lecture", "notes", "course", "instructor", "instructors", "prof", "professor", "dr"}
+        words = set(re.findall(r"\b[a-zA-Z]{2,}\b", t_lower))
+        if words and words.intersection(structural_terms):
+            return "DOCUMENT_METADATA"
 
         return "ACADEMIC_CONCEPT"
 
@@ -145,20 +150,31 @@ class DocumentTopicMapper:
         """
         candidates = []
 
+        # Filter out lines that contain author attributions or course headers
+        clean_lines = []
+        for line in text.splitlines():
+            l_str = line.strip()
+            l_low = l_str.lower()
+            if any(k in l_low for k in ["instructor", "prof.", "dr.", "lecture notes", "written by", "edited by", "course", "cs224n", "@", "copyright"]):
+                continue
+            clean_lines.append(l_str)
+
+        clean_text = "\n".join(clean_lines)
+
         # 1. Regex for capitalized academic terms (e.g. "Distributional Semantics", "Cosine Similarity", "ACID Properties")
-        concept_matches = re.findall(r"\b([A-Z][a-zA-Z0-9\-\']+(?:\s+[A-Z][a-zA-Z0-9\-\']+){1,3})\b", text)
+        concept_matches = re.findall(r"\b([A-Z][a-zA-Z0-9\-\']+(?:\s+[A-Z][a-zA-Z0-9\-\']+){1,3})\b", clean_text)
         for cm in concept_matches:
             c_clean = self.clean_concept_name(cm)
             if self.is_valid_academic_topic_line(c_clean) and c_clean not in candidates:
-                if self.classify_academic_topic_type(c_clean, text) in ["ACADEMIC_CONCEPT", "SUBCONCEPT"]:
+                if self.classify_academic_topic_type(c_clean, clean_text) in ["ACADEMIC_CONCEPT", "SUBCONCEPT"]:
                     candidates.append(c_clean)
 
         # 2. Key academic definitions in text e.g. "X is defined as...", "X represents..."
-        def_matches = re.findall(r"([A-Z][a-zA-Z0-9\s]{3,35})\s+(?:is defined as|refers to|represents|is the study of|allows)", text)
+        def_matches = re.findall(r"([A-Z][a-zA-Z0-9\s]{3,35})\s+(?:is defined as|refers to|represents|is the study of|allows)", clean_text)
         for dm in def_matches:
             d_clean = self.clean_concept_name(dm)
             if self.is_valid_academic_topic_line(d_clean) and d_clean not in candidates:
-                if self.classify_academic_topic_type(d_clean, text) in ["ACADEMIC_CONCEPT", "SUBCONCEPT"]:
+                if self.classify_academic_topic_type(d_clean, clean_text) in ["ACADEMIC_CONCEPT", "SUBCONCEPT"]:
                     candidates.append(d_clean)
 
         return candidates
@@ -221,7 +237,7 @@ class DocumentTopicMapper:
             if not valid_final_concepts:
                 valid_final_concepts.append("Core Syllabus & Academic Concepts")
 
-            for sub_name in valid_final_concepts[:4]:
+            for sub_name in valid_final_concepts[:10]:
                 topics_list.append({
                     "topic_id": f"top_{topic_counter}",
                     "title": sub_name,
@@ -242,7 +258,7 @@ class DocumentTopicMapper:
     def allocate_question_slots(self, topic_map: Dict[str, Any], requested_count: int) -> List[Dict[str, Any]]:
         """
         Allocates question slots across available valid academic topics.
-        Ensures topic diversity across question slots.
+        Ensures topic and chunk diversity across question slots.
         """
         topics = topic_map.get("topics", [])
         if not topics:
@@ -255,9 +271,30 @@ class DocumentTopicMapper:
                 "text_summary": ""
             }]
 
+        # Prioritize topics with distinct primary chunk_ids
+        selected_topics = []
+        seen_primary_chunks = set()
+
+        for t in topics:
+            primary_chunk = t.get("chunk_ids", [None])[0] if t.get("chunk_ids") else None
+            if primary_chunk and primary_chunk not in seen_primary_chunks:
+                seen_primary_chunks.add(primary_chunk)
+                selected_topics.append(t)
+
+        # Fill remaining slots from unused topics if needed
+        if len(selected_topics) < requested_count:
+            for t in topics:
+                if t not in selected_topics:
+                    selected_topics.append(t)
+                if len(selected_topics) >= requested_count:
+                    break
+
+        if not selected_topics:
+            selected_topics = topics
+
         slots = []
         for i in range(requested_count):
-            t = topics[i % len(topics)]
+            t = selected_topics[i % len(selected_topics)]
             diff_level = "Easy" if i % 3 == 0 else ("Medium" if i % 3 == 1 else "Hard")
 
             slots.append({

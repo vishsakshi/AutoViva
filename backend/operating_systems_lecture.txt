@@ -1,0 +1,13 @@
+Unit 1: Operating Systems Architecture and Process Synchronization
+
+Process Management and Thread Execution:
+An operating system manages process execution through process control blocks (PCB). A process transitions through state states: Ready, Running, Waiting, and Terminated. The CPU scheduler selects a process from the ready queue based on scheduling algorithms such as Round Robin, Shortest Job First (SJF), and Preemptive Priority Scheduling.
+
+Process Synchronization and Mutex Locks:
+Concurrent execution of multiple threads sharing data can lead to race conditions. To enforce mutual exclusion, operating systems provide synchronization primitives such as mutex locks and counting semaphores. Dijkstra introduced semaphores with two atomic operations: wait() (or P operation) and signal() (or V operation).
+
+Deadlocks and Bank's Algorithm:
+A deadlock occurs when two or more processes are blocked waiting for resources held by each other. The four necessary conditions for deadlock are: Mutual Exclusion, Hold and Wait, No Preemption, and Circular Wait. Edsger Dijkstra's Banker's Algorithm is used for deadlock avoidance by verifying whether allocating resources maintains the system in a safe state.
+
+Virtual Memory and Page Replacement:
+Virtual memory separates user logical memory from physical memory using paging and page tables. Page faults occur when a requested page is not present in physical RAM. Page replacement algorithms such as Least Recently Used (LRU), Optimal Page Replacement, and First-In-First-Out (FIFO) select candidate pages to swap to disk swap space. Thrashing occurs when a process spends more time swapping pages than executing instructions.

@@ -79,11 +79,11 @@ class EvaluationEngineModule1:
                 reasoning = str(raw_match.get("reasoning", "")).strip()
                 alloc_marks = item.marks
             else:
-                # Fallback calculation for this criterion
-                classification = EvaluatorClassification.SUPPORTED if len(req.student_answer.split()) > 15 else EvaluatorClassification.PARTIALLY_SUPPORTED
+                # Fallback calculation for unmapped criterion
+                classification = EvaluatorClassification.NOT_MENTIONED
                 conf = 0.85
-                evidence = req.student_answer[:120]
-                reasoning = f"Evaluated against criterion '{item.criterion}'."
+                evidence = ""
+                reasoning = f"Student answer omits support for criterion '{item.criterion}'."
                 alloc_marks = item.marks
 
             # CONFIDENCE GATE: If confidence < 0.55, flag REVIEW_REQUIRED

@@ -1,0 +1,14 @@
+Unit 1: Normal Distribution & Standard Deviation σ Analysis
+In statistical inference and machine learning, standard deviation σ measures the amount of variation or dispersion of a set of data values. A low standard deviation σ indicates that the observed data values tend to be close to the population mean μ of the dataset. Formally, for a continuous random variable X with expected mean μ, the variance is defined as σ^2 = E[(X - μ)^2].
+
+Unit 2: Feature Scaling and Z-Score Standardization
+In data preprocessing for multivariate statistical modeling, z-score standardization transforms continuous numerical features so that they exhibit a zero mean μ = 0 and a unit standard deviation σ = 1. The mathematical z-score transformation formula is computed as z = (x - μ) / σ for each individual feature value x across the sample set. Scaling ensures features contribute equally to Support Vector Machines.
+
+Unit 3: Activation Functions and Logistic Sigmoid σ(z)
+In deep artificial neural networks and binary logistic regression models, the logistic sigmoid activation function is defined by the equation σ(z) = 1 / (1 + e^-z), which smoothly maps real-valued inputs z into the bounded open interval (0, 1). The first mathematical derivative of the sigmoid activation function is expressed as σ'(z) = σ(z)(1 - σ(z)), enabling efficient gradient backpropagation.
+
+Unit 4: Gradient Descent Learning Rate α and L2 Regularization Parameter λ
+During iterative parameter estimation in supervised learning, the learning rate hyperparameter α dictates the step size taken along the negative gradient direction during parameter updates. If the learning rate setting is α ≤ 10^-5, parameter optimization converges impractically slowly. To mitigate model overfitting, L2 weight decay introduces a regularization penalty term λ ∑ w_j^2 into the loss function.
+
+Unit 5: Probably Approximately Correct (PAC) Generalization Error Bound ε
+Under the Probably Approximately Correct (PAC) theoretical learning framework, computational learning theory establishes formal bounds on model generalizability using the error threshold ε ≤ 0.05. The risk confidence parameter 1 - δ defines the lower bound probability of drawing a representative training sample set from the underlying data distribution.

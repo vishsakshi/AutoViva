@@ -25,9 +25,46 @@ class ActiveQuestionSchema(BaseModel):
 @router.get("/active-questions", response_model=List[ActiveQuestionSchema])
 async def get_active_viva_questions():
     """Returns active approved questions for student viva examination."""
-    bank = question_generator_engine.approved_question_bank
-    if not bank:
-        # Provide default high-quality viva questions if bank is empty
+    from app.services.viva_creation_service import viva_creation_service
+    import uuid
+
+    active_list = []
+    
+    # 1. Fetch from published viva sessions
+    published_vivas = viva_creation_service.get_published_vivas()
+    for viva in published_vivas:
+        qs = viva.approved_questions or viva.generated_questions
+        for q in qs:
+            active_list.append(
+                ActiveQuestionSchema(
+                    question_id=q.get("question_id", f"vq_{uuid.uuid4().hex[:6]}"),
+                    subject=viva.subject,
+                    topic=viva.topic,
+                    question_text=q.get("question_text") or q.get("question", ""),
+                    ideal_answer=q.get("ideal_answer", ""),
+                    allocated_marks=q.get("allocated_marks", 10.0),
+                    time_limit_seconds=120
+                )
+            )
+
+    # 2. Fetch from question_generator_engine.approved_question_bank if active_list is empty
+    if not active_list:
+        bank = getattr(question_generator_engine, "approved_question_bank", {})
+        for q_id, q_item in bank.items():
+            active_list.append(
+                ActiveQuestionSchema(
+                    question_id=q_id,
+                    subject=getattr(q_item, "subject", "General"),
+                    topic=getattr(q_item, "topic", "General"),
+                    question_text=getattr(q_item, "question_text", str(q_item)),
+                    ideal_answer=getattr(q_item, "ideal_answer", ""),
+                    allocated_marks=10.0,
+                    time_limit_seconds=120
+                )
+            )
+
+    # 3. Fallback defaults
+    if not active_list:
         return [
             ActiveQuestionSchema(
                 question_id="vq_cn_nat_001",
@@ -49,19 +86,6 @@ async def get_active_viva_questions():
             )
         ]
 
-    active_list = []
-    for q_id, q_item in bank.items():
-        active_list.append(
-            ActiveQuestionSchema(
-                question_id=q_id,
-                subject=q_item.subject,
-                topic=q_item.topic,
-                question_text=q_item.question_text,
-                ideal_answer=q_item.ideal_answer,
-                allocated_marks=10.0,
-                time_limit_seconds=120
-            )
-        )
     return active_list
 
 @router.post("/transcribe", response_model=TranscribeResponse)

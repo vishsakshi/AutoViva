@@ -50,7 +50,7 @@ class VivaQuestionSchema(BaseModel):
     source_chunk_ids: List[str] = Field(default_factory=list)
     reference_source: str = ""
     confidence: float = 0.90
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "qwen2.5:3b"
     validation_status: str = "VERIFIED"
     validation_report: Dict[str, Any] = Field(default_factory=dict)
     estimated_answer_time_seconds: int = 120

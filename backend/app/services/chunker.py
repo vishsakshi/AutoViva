@@ -25,6 +25,28 @@ class DocumentChunker:
                 paragraphs.append(cleaned)
         return paragraphs
 
+    def _sanitize_chunk_text(self, text: str) -> str:
+        """Strips consecutive phrase repetitions, noise tokens, and broken fragments from chunk text."""
+        if not text:
+            return ""
+
+        words = text.split()
+        if len(words) >= 4:
+            clean_words = []
+            i = 0
+            while i < len(words):
+                if i + 3 < len(words) and words[i].lower() == words[i+2].lower() and words[i+1].lower() == words[i+3].lower():
+                    clean_words.extend(words[i:i+2])
+                    i += 4
+                elif i + 1 < len(words) and words[i].lower() == words[i+1].lower():
+                    clean_words.append(words[i])
+                    i += 2
+                else:
+                    clean_words.append(words[i])
+                    i += 1
+            text = " ".join(clean_words)
+        return text.strip()
+
     def chunk_page(
         self,
         page_data: Dict[str, Any],
@@ -77,7 +99,10 @@ class DocumentChunker:
         structured_chunks = []
         doc_prefix = document_id.replace("-", "_")
 
-        for idx, chunk_text in enumerate(chunks):
+        for idx, raw_chunk_text in enumerate(chunks):
+            chunk_text = self._sanitize_chunk_text(raw_chunk_text)
+            if not chunk_text or len(chunk_text) < 15:
+                continue
             chunk_id = f"{doc_prefix}_p{page_number}_c{idx+1}_{uuid.uuid4().hex[:6]}"
             
             # Determine specific section for chunk if detected
@@ -137,15 +162,18 @@ class DocumentChunker:
 
     def print_chunk_debug_summary(self, chunks: List[Dict[str, Any]]):
         """Debug helper to print structured chunk metadata and text preview."""
-        print("\n" + "=" * 80)
-        print(f"CHUNK DEBUG SUMMARY ({len(chunks)} Chunks Extracted)")
-        print("=" * 80)
-        for idx, c in enumerate(chunks[:10]):
-            meta = c.get("metadata", {})
-            txt = c.get("text", "")
-            preview = txt[:120].replace("\n", " ") + ("..." if len(txt) > 120 else "")
-            print(f"CHUNK ID: {c.get('chunk_id')} | PAGE: {meta.get('page_number')} | SECTION: {meta.get('section_title')}")
-            print(f"TEXT: \"{preview}\"")
-            print("-" * 80)
+        try:
+            print("\n" + "=" * 80)
+            print(f"CHUNK DEBUG SUMMARY ({len(chunks)} Chunks Extracted)")
+            print("=" * 80)
+            for idx, c in enumerate(chunks[:10]):
+                meta = c.get("metadata", {})
+                txt = c.get("text", "")
+                preview = txt[:120].replace("\n", " ") + ("..." if len(txt) > 120 else "")
+                print(f"CHUNK ID: {c.get('chunk_id')} | PAGE: {meta.get('page_number')} | SECTION: {meta.get('section_title')}")
+                print(f"TEXT: \"{preview}\"")
+                print("-" * 80)
+        except Exception as e:
+            logger.warning(f"Notice: Chunk debug preview print skipped due to console output stream encoding ({e})")
 
 document_chunker = DocumentChunker()

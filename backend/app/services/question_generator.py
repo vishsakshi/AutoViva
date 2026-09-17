@@ -35,8 +35,73 @@ class QuestionGeneratorEngine:
     8. Regeneration Loop (Max 3 retries per topic slot using alternate chunks).
     9. Rich Provenance Storage & Faculty Review Lifecycle (`FACULTY_REVIEW`).
     """
-    def __init__(self, max_retries_per_slot: int = 3):
+    def __init__(self, max_retries_per_slot: int = 2):
         self.max_retries_per_slot = max_retries_per_slot
+        self.draft_questions: Dict[str, Any] = {}
+        self.approved_question_bank: Dict[str, Any] = {}
+        self.generation_logs: List[Dict[str, Any]] = []
+
+    def _build_coherent_evidence_window(
+        self,
+        primary_chunk: Dict[str, Any],
+        doc_chunks: List[Dict[str, Any]],
+        window_size: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        Builds a coherent 2-3 chunk evidence window centered around primary_chunk.
+        Rules:
+        - Must preserve document_id isolation (only chunks with same document_id).
+        - Prefers adjacent chunks in doc_chunks sequence (same document).
+        - Prefers chunks with matching section_title / topic.
+        - Avoids duplicate chunks.
+        """
+        if not doc_chunks:
+            return [primary_chunk]
+
+        target_doc_id = primary_chunk.get("document_id") or primary_chunk.get("metadata", {}).get("document_id")
+        primary_chunk_id = primary_chunk.get("chunk_id")
+        primary_section = primary_chunk.get("section_title") or primary_chunk.get("metadata", {}).get("section_title")
+
+        filtered_doc_chunks = doc_chunks
+        if target_doc_id:
+            same_doc = [c for c in doc_chunks if (c.get("document_id") or c.get("metadata", {}).get("document_id")) == target_doc_id]
+            if same_doc:
+                filtered_doc_chunks = same_doc
+
+        primary_idx = -1
+        for idx, c in enumerate(filtered_doc_chunks):
+            if c.get("chunk_id") == primary_chunk_id:
+                primary_idx = idx
+                break
+
+        if primary_idx == -1:
+            return [primary_chunk]
+
+        window_indices = [primary_idx]
+
+        if primary_idx > 0:
+            prev_chunk = filtered_doc_chunks[primary_idx - 1]
+            prev_sec = prev_chunk.get("section_title") or prev_chunk.get("metadata", {}).get("section_title")
+            if not primary_section or not prev_sec or prev_sec == primary_section:
+                window_indices.insert(0, primary_idx - 1)
+
+        if primary_idx < len(filtered_doc_chunks) - 1:
+            next_chunk = filtered_doc_chunks[primary_idx + 1]
+            next_sec = next_chunk.get("section_title") or next_chunk.get("metadata", {}).get("section_title")
+            if not primary_section or not next_sec or next_sec == primary_section:
+                window_indices.append(primary_idx + 1)
+
+        window_chunks = [filtered_doc_chunks[i] for i in window_indices]
+
+        seen_ids = set()
+        result_chunks = []
+        for c in window_chunks:
+            cid = c.get("chunk_id")
+            if cid and cid not in seen_ids:
+                seen_ids.add(cid)
+                result_chunks.append(c)
+
+        return result_chunks if result_chunks else [primary_chunk]
 
     def generate_document_grounded_questions(
         self,
@@ -47,8 +112,10 @@ class QuestionGeneratorEngine:
         requested_count: int = 3
     ) -> Dict[str, Any]:
         start_time = time.perf_counter()
+        llm_service.reset_call_stats()
+
         print("\n" + "=" * 95)
-        print("AUTOVIVA REDESIGNED EVIDENCE-FIRST RAG QUESTION GENERATION PIPELINE")
+        print("AUTOVIVA OPTIMIZED EVIDENCE-FIRST RAG QUESTION GENERATION PIPELINE")
         print(f"Document ID: '{document_id}' | Viva ID: '{viva_id}' | Subject: '{subject}' | Topic: '{topic}'")
         print(f"LLM Provider: {llm_service.provider} | Model: {llm_service.model}")
         print("=" * 95)
@@ -78,10 +145,12 @@ class QuestionGeneratorEngine:
             logger.error(f"[ZERO CHUNKS ERROR] {err_msg}")
             print(f"\n[PIPELINE ABORTED]: {err_msg}\n")
             return {
-                "status": "INSUFFICIENT_CONTEXT",
+                "status": "INSUFFICIENT_RETRIEVAL_EVIDENCE",
+                "error_code": "INSUFFICIENT_RETRIEVAL_EVIDENCE",
                 "message": err_msg,
                 "generated_questions": [],
-                "verified_count": 0
+                "verified_count": 0,
+                "llm_telemetry": llm_service.get_call_stats()
             }
 
         # 2. Build Stage 1 + Stage 2 Topic & Section Map
@@ -95,8 +164,20 @@ class QuestionGeneratorEngine:
         rejected_log: List[Dict[str, Any]] = []
         accepted_question_texts: List[str] = []
 
+        # Coverage Tracking
+        used_chunk_ids: set = set()
+        used_topics: set = set()
+        used_sections: set = set()
+
+        total_session_attempts = 0
+        max_session_attempts = max(25, requested_count * 4)  # Bounded Budget: max(25, 4x count)
+
         # 4. Generate, Synthesize, and Validate per Slot
         for slot in question_slots:
+            if total_session_attempts >= max_session_attempts:
+                logger.warning(f"[SESSION BUDGET REACHED] Reached max candidate attempts budget ({max_session_attempts}). Halting further generation.")
+                break
+
             slot_idx = slot["slot_index"]
             slot_topic = slot["topic_title"]
             slot_section = slot["section"]
@@ -104,41 +185,76 @@ class QuestionGeneratorEngine:
 
             slot_success = False
 
-            # Retrieve evidence chunks specifically for this topic
+            # Retrieve evidence chunks matching topic substantive terms
+            stop_words = {"academic", "syllabus", "unit", "chapter", "section", "module", "part", "notes", "lecture", "overview", "introduction"}
+            topic_words = [w.lower() for w in re.findall(r"\b[a-zA-Z]{3,}\b", slot_topic) if w.lower() not in stop_words]
+
             retrieval_res = knowledge_service.search_knowledge_base(
                 query=f"{slot_section} {slot_topic} definition mechanism principle",
-                top_k=max(5, self.max_retries_per_slot),
+                top_k=8,
                 document_id=document_id,
                 viva_id=viva_id,
                 subject=subject
             )
-            retrieved_candidates = retrieval_res.get("results", [])
-            if not retrieved_candidates:
-                retrieved_candidates = [c for c in doc_chunks if c.get("chunk_id") in slot.get("chunk_ids", [])]
-            if not retrieved_candidates:
-                retrieved_candidates = doc_chunks
+            retrieved_candidates = retrieval_res.get("results", []) or doc_chunks
 
-            # Attempt Loop (Max 3 retries using alternate chunks)
+            # Strictly prioritize chunks containing topic substantive words
+            if topic_words:
+                matched_chunks = [
+                    c for c in retrieved_candidates
+                    if any(tw in c.get("text", "").lower() for tw in topic_words)
+                ]
+                if not matched_chunks:
+                    matched_chunks = [
+                        c for c in doc_chunks
+                        if any(tw in c.get("text", "").lower() for tw in topic_words)
+                    ]
+                if matched_chunks:
+                    retrieved_candidates = matched_chunks
+
+            # Sort candidates so unused chunks are evaluated first
+            unused_cand_list = [c for c in retrieved_candidates if c.get("chunk_id") not in used_chunk_ids]
+            ordered_candidates = unused_cand_list if unused_cand_list else retrieved_candidates
+
+            # Attempt Loop (Max 2 retries per primary slot)
             for attempt in range(1, self.max_retries_per_slot + 1):
-                chunk_candidate = retrieved_candidates[(attempt - 1) % len(retrieved_candidates)]
-                evidence_chunks = [chunk_candidate]
+                if total_session_attempts >= max_session_attempts:
+                    break
+
+                total_session_attempts += 1
+                chunk_candidate = ordered_candidates[(attempt - 1) % len(ordered_candidates)]
+                evidence_chunks = self._build_coherent_evidence_window(chunk_candidate, doc_chunks)
 
                 retrieval_score = chunk_candidate.get("similarity_score", 0.85)
                 primary_page = chunk_candidate.get("page_number", slot.get("pages", [1])[0])
                 primary_chunk_id = chunk_candidate.get("chunk_id", f"chunk_{slot_idx}_{attempt}")
                 filename_source = chunk_candidate.get("filename") or chunk_candidate.get("source_file") or "Uploaded Document"
 
-                logger.info(f"[SLOT {slot_idx} ATTEMPT {attempt}] Querying evidence chunk '{primary_chunk_id}' for topic '{slot_topic}'...")
+                logger.info(f"[SLOT {slot_idx} ATTEMPT {attempt} | SESSION CALL #{total_session_attempts}] Querying evidence chunk '{primary_chunk_id}' for topic '{slot_topic}'...")
 
-                # Step 6: LLM Question Generation from evidence
+                # Step 6: LLM Question + Answer Generation (Single Call)
                 synth_res = llm_service.generate_viva_question_from_evidence(
                     evidence_chunks=evidence_chunks,
                     topic_title=slot_topic,
                     section_title=slot_section,
-                    target_difficulty=target_diff
+                    target_difficulty=target_diff,
+                    existing_questions=accepted_question_texts,
+                    attempt=attempt
                 )
 
-                if synth_res.get("status") == "ERROR" or synth_res.get("error_code") in ["INSUFFICIENT_CONTEXT", "INSUFFICIENT_EVIDENCE"]:
+                if synth_res.get("status") == "ERROR":
+                    if synth_res.get("error_code") == "LLM_GENERATION_FAILED":
+                        err_msg = synth_res.get("message", "LLM API generation failed.")
+                        logger.error(f"[LLM GENERATION FAILED] {err_msg}")
+                        return {
+                            "status": "LLM_GENERATION_FAILED",
+                            "message": err_msg,
+                            "generated_questions": [],
+                            "verified_count": 0,
+                            "rejected_log": rejected_log,
+                            "llm_telemetry": llm_service.get_call_stats()
+                        }
+                    
                     rej_reason = f"LLM returned error status: {synth_res.get('error_code', 'ERROR')}"
                     logger.warning(f"  [DISCARDING CHUNK {primary_chunk_id}]: {rej_reason}")
                     rejected_log.append({
@@ -159,7 +275,7 @@ class QuestionGeneratorEngine:
                 keywords = synth_res.get("expected_keywords", [])
                 llm_model = synth_res.get("model", llm_service.model)
 
-                # Step 8: Multi-Stage Validation Gate (Deterministic + LLM Judge)
+                # Step 8: Multi-Stage Validation Gate
                 verif_res = question_verifier.verify_question_candidate(
                     question_text=q_text,
                     ideal_answer=ideal_ans,
@@ -209,6 +325,9 @@ class QuestionGeneratorEngine:
 
                     verified_questions.append(q_obj)
                     accepted_question_texts.append(q_text)
+                    used_chunk_ids.add(primary_chunk_id)
+                    used_topics.add(slot_topic.lower())
+                    used_sections.add(slot_section.lower())
                     slot_success = True
                     print(f"  [VERIFIED SLOT {slot_idx}] '{q_text}' (Page {primary_page}, Chunk: {primary_chunk_id})")
                     break
@@ -223,62 +342,120 @@ class QuestionGeneratorEngine:
                     rejected_log.append(rej_entry)
                     print(f"  [REJECTED SLOT {slot_idx} ATTEMPT {attempt}]: {verif_res['reason']}")
 
-            # Step 9: If all attempts fail, stage slot as NEEDS_FACULTY_REVIEW without fabricating template content
-            if not slot_success and len(verified_questions) < requested_count and doc_chunks:
-                alt_chunk = doc_chunks[len(verified_questions) % len(doc_chunks)]
-                alt_page = alt_chunk.get("page_number", 1)
-                alt_sec = slot_section or alt_chunk.get("section_title", "Core Syllabus")
-                alt_topic = topic_mapper.clean_concept_name(slot_topic)
+            # Alternate Unassigned Topic Search (Single Attempt if Primary Slot Failed)
+            if not slot_success and total_session_attempts < max_session_attempts:
+                unused_topics = [
+                    t for t in doc_topic_map.get("topics", [])
+                    if t["title"].lower() not in used_topics and t["title"].lower() != slot_topic.lower()
+                ]
+                
+                if unused_topics:
+                    alt_topic_info = unused_topics[0]
+                    alt_topic = alt_topic_info["title"]
+                    alt_section = alt_topic_info["section"]
+                    logger.info(f"[SLOT {slot_idx} ALT TOPIC] Attempting alternate topic '{alt_topic}'...")
+                    
+                    retrieval_res = knowledge_service.search_knowledge_base(
+                        query=f"{alt_section} {alt_topic} definition mechanism principle",
+                        top_k=8,
+                        document_id=document_id,
+                        viva_id=viva_id,
+                        subject=subject
+                    )
+                    alt_candidates = retrieval_res.get("results", []) or doc_chunks
+                    unused_alt_cands = [c for c in alt_candidates if c.get("chunk_id") not in used_chunk_ids]
+                    chunk_candidate = unused_alt_cands[0] if unused_alt_cands else alt_candidates[0]
+                    evidence_chunks = self._build_coherent_evidence_window(chunk_candidate, doc_chunks)
+                    
+                    primary_page = chunk_candidate.get("page_number", 1)
+                    primary_chunk_id = chunk_candidate.get("chunk_id", f"chunk_{slot_idx}_alt")
+                    filename_source = chunk_candidate.get("filename") or chunk_candidate.get("source_file") or "Uploaded Document"
+                    
+                    total_session_attempts += 1
+                    synth_res = llm_service.generate_viva_question_from_evidence(
+                        evidence_chunks=evidence_chunks,
+                        topic_title=alt_topic,
+                        section_title=alt_section,
+                        target_difficulty=target_diff,
+                        existing_questions=accepted_question_texts,
+                        attempt=1
+                    )
+                    
+                    if synth_res.get("status") == "SUCCESS":
+                        q_text = synth_res.get("question", "")
+                        ideal_ans = synth_res.get("ideal_answer", "")
+                        
+                        verif_res = question_verifier.verify_question_candidate(
+                            question_text=q_text,
+                            ideal_answer=ideal_ans,
+                            evidence_chunks=evidence_chunks,
+                            topic_title=alt_topic,
+                            existing_questions=accepted_question_texts,
+                            source_quote=synth_res.get("source_quote", ""),
+                            options=synth_res.get("options"),
+                            correct_answer=synth_res.get("correct_answer", "A")
+                        )
+                        
+                        if verif_res["valid"]:
+                            q_id = f"vq_{uuid.uuid4().hex[:8]}"
+                            q_obj = {
+                                "question_id": q_id,
+                                "document_id": document_id or "",
+                                "viva_id": viva_id or "",
+                                "filename": filename_source,
+                                "subject": subject,
+                                "topic": alt_topic,
+                                "section": alt_section,
+                                "difficulty": target_diff,
+                                "blooms_level": synth_res.get("bloom_level", "Understand"),
+                                "question": q_text,
+                                "question_text": q_text,
+                                "options": synth_res.get("options", {}),
+                                "correct_answer": synth_res.get("correct_answer", "A"),
+                                "source_quote": synth_res.get("source_quote", ""),
+                                "ideal_answer": ideal_ans,
+                                "evaluation_rubric": synth_res.get("rubric", []),
+                                "rubric": synth_res.get("rubric", []),
+                                "total_marks": 10.0,
+                                "marks": 10.0,
+                                "expected_keywords": [alt_topic],
+                                "source_page": f"Page {primary_page}",
+                                "source_section": alt_section,
+                                "source_chunk_ids": [primary_chunk_id],
+                                "source_chunk": primary_chunk_id,
+                                "source_chunks": [f"Page {primary_page} ({alt_section})"],
+                                "reference_source": f"Page {primary_page} · {alt_topic}",
+                                "confidence": 0.95,
+                                "llm_model": synth_res.get("model", llm_service.model),
+                                "validation_status": "VERIFIED",
+                                "validation_report": verif_res,
+                                "status": QuestionStatus.FACULTY_REVIEW.value
+                            }
+                            verified_questions.append(q_obj)
+                            accepted_question_texts.append(q_text)
+                            used_chunk_ids.add(primary_chunk_id)
+                            used_topics.add(alt_topic.lower())
+                            used_sections.add(alt_section.lower())
+                            slot_success = True
+                            print(f"  [VERIFIED SLOT {slot_idx} ALT] '{q_text}' (Page {primary_page}, Chunk: {primary_chunk_id})")
+                        else:
+                            rejected_log.append({
+                                "slot": slot_idx,
+                                "attempt": 1,
+                                "chunk_id": primary_chunk_id,
+                                "candidate": q_text,
+                                "reason": f"Alt Topic '{alt_topic}' rejected: {verif_res['reason']}"
+                            })
 
-                q_id = f"vq_{uuid.uuid4().hex[:8]}"
-                q_fallback = {
-                    "question_id": q_id,
-                    "document_id": document_id or "",
-                    "viva_id": viva_id or "",
-                    "filename": alt_chunk.get("filename", "Uploaded Document"),
-                    "subject": subject,
-                    "topic": alt_topic,
-                    "section": alt_sec,
-                    "difficulty": target_diff,
-                    "blooms_level": "Understand",
-                    "question": f"Explain the core principles and academic significance of {alt_topic}.",
-                    "question_text": f"Explain the core principles and academic significance of {alt_topic}.",
-                    "options": {},
-                    "correct_answer": "A",
-                    "source_quote": alt_chunk.get("text", "")[:120],
-                    "ideal_answer": alt_chunk.get("text", "")[:250],
-                    "evaluation_rubric": [
-                        {"criterion": f"Core understanding of {alt_topic}", "marks": 5.0},
-                        {"criterion": "Technical details and applications", "marks": 5.0}
-                    ],
-                    "rubric": [
-                        {"criterion": f"Core understanding of {alt_topic}", "marks": 5.0},
-                        {"criterion": "Technical details and applications", "marks": 5.0}
-                    ],
-                    "total_marks": 10.0,
-                    "marks": 10.0,
-                    "expected_keywords": [alt_topic],
-                    "source_page": f"Page {alt_page}",
-                    "source_section": alt_sec,
-                    "source_chunk_ids": [alt_chunk.get("chunk_id", "")],
-                    "source_chunk": alt_chunk.get("chunk_id", f"chunk_{slot_idx}"),
-                    "source_chunks": [f"Page {alt_page} ({alt_sec})"],
-                    "reference_source": f"Page {alt_page} · {alt_topic}",
-                    "confidence": 0.80,
-                    "llm_model": "AutoViva-Grounded-RAG-v2",
-                    "validation_status": "NEEDS_FACULTY_REVIEW",
-                    "validation_report": {"valid": False, "reason": "Generation failed LLM validation gate. Staged for Faculty Review."},
-                    "status": QuestionStatus.FACULTY_REVIEW.value
-                }
-                verified_questions.append(q_fallback)
-                accepted_question_texts.append(q_fallback["question_text"])
-                print(f"  [STAGED FOR REVIEW SLOT {slot_idx}] '{q_fallback['question_text']}' (Page {alt_page})")
+            if not slot_success:
+                logger.warning(f"[SLOT UNFULFILLED] Slot {slot_idx} ({slot_topic}) could not be fulfilled. ZERO synthetic fallback added.")
 
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        telemetry = llm_service.get_call_stats()
 
         print("\n" + "=" * 95)
-        print(f"QUESTION GENERATION COMPLETED: {len(verified_questions)} / {requested_count} Questions Staged in {elapsed_ms} ms.")
-        print(f"Rejected Candidates Count: {len(rejected_log)}")
+        print(f"QUESTION GENERATION COMPLETED: {len(verified_questions)} / {requested_count} Questions Staged in {elapsed_ms} ms ({elapsed_ms/1000:.1f} s).")
+        print(f"LLM Telemetry: Total Calls={telemetry['total_calls']} | Avg Call Latency={telemetry.get('avg_latency_ms', 0)} ms | Rejections={len(rejected_log)}")
         print("=" * 95 + "\n")
 
         return {
@@ -290,7 +467,8 @@ class QuestionGeneratorEngine:
             "generated_questions": verified_questions,
             "rejected_log": rejected_log,
             "topic_map": doc_topic_map,
-            "latency_ms": elapsed_ms
+            "latency_ms": elapsed_ms,
+            "llm_telemetry": telemetry
         }
 
     def generate_questions(

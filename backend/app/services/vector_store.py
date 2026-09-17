@@ -145,6 +145,21 @@ class VectorStore:
             logger.error(f"Error fetching document chunks for '{document_id}': {e}")
             return []
 
+    def delete_document_chunks(self, document_id: str) -> int:
+        """Deletes all chunks from ChromaDB for a given document_id."""
+        if not document_id:
+            return 0
+        try:
+            res = self.collection.get(where={"document_id": document_id})
+            if res and res.get("ids"):
+                ids_to_del = res["ids"]
+                self.collection.delete(ids=ids_to_del)
+                logger.info(f"Deleted {len(ids_to_del)} vectors for document_id '{document_id}' from ChromaDB.")
+                return len(ids_to_del)
+        except Exception as e:
+            logger.error(f"Error deleting chunks for document '{document_id}': {e}")
+        return 0
+
     def get_stats(self) -> Dict[str, Any]:
         return {
             "total_chunks": self.collection.count(),
