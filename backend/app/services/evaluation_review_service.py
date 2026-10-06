@@ -42,6 +42,9 @@ class EvaluationReviewServiceModule4:
         Runs complete evaluation pipeline:
         Module 1 (Classification) -> Module 2 (Scoring) -> Module 3 (Feedback) -> Staged as PENDING_REVIEW
         """
+        # Use values from request if provided, otherwise fall back to params
+        effective_question_id = req.question_id if req.question_id and req.question_id != "vq_com_ip_4198fe" else question_id
+        effective_student_id = req.student_id if req.student_id and req.student_id != "std_anonymous" else student_id
         # Run Module 1
         m1_res = evaluation_engine_module1.evaluate_answer_module1(req)
         
@@ -61,8 +64,9 @@ class EvaluationReviewServiceModule4:
         # Create Full Record (AI Version 1)
         record = FullEvaluationRecord(
             evaluation_id=m1_res.evaluation_id,
-            question_id=question_id,
-            student_id=student_id,
+            question_id=effective_question_id,
+            student_id=effective_student_id,
+            viva_id=req.viva_id,
             question_text=req.question_text,
             ideal_answer=req.ideal_answer,
             student_answer=req.student_answer,

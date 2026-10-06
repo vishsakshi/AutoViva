@@ -185,32 +185,24 @@ class QuestionGeneratorEngine:
 
             slot_success = False
 
-            # Retrieve evidence chunks matching topic substantive terms
+            # Match evidence chunks directly from in-memory doc_chunks
             stop_words = {"academic", "syllabus", "unit", "chapter", "section", "module", "part", "notes", "lecture", "overview", "introduction"}
             topic_words = [w.lower() for w in re.findall(r"\b[a-zA-Z]{3,}\b", slot_topic) if w.lower() not in stop_words]
 
-            retrieval_res = knowledge_service.search_knowledge_base(
-                query=f"{slot_section} {slot_topic} definition mechanism principle",
-                top_k=8,
-                document_id=document_id,
-                viva_id=viva_id,
-                subject=subject
-            )
-            retrieved_candidates = retrieval_res.get("results", []) or doc_chunks
-
-            # Strictly prioritize chunks containing topic substantive words
             if topic_words:
                 matched_chunks = [
-                    c for c in retrieved_candidates
+                    c for c in doc_chunks
                     if any(tw in c.get("text", "").lower() for tw in topic_words)
                 ]
-                if not matched_chunks:
+                if not matched_chunks and slot_section:
+                    sec_clean = slot_section.lower()
                     matched_chunks = [
                         c for c in doc_chunks
-                        if any(tw in c.get("text", "").lower() for tw in topic_words)
+                        if sec_clean in (c.get("section_title") or c.get("metadata", {}).get("section_title") or "").lower()
                     ]
-                if matched_chunks:
-                    retrieved_candidates = matched_chunks
+                retrieved_candidates = matched_chunks if matched_chunks else doc_chunks
+            else:
+                retrieved_candidates = doc_chunks
 
             # Sort candidates so unused chunks are evaluated first
             unused_cand_list = [c for c in retrieved_candidates if c.get("chunk_id") not in used_chunk_ids]

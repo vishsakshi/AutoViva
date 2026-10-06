@@ -36,6 +36,7 @@ class FullEvaluationRecord(BaseModel):
     evaluation_id: str
     question_id: Optional[str] = "vq_com_ip_4198fe"
     student_id: Optional[str] = "std_10293"
+    viva_id: Optional[str] = None
     question_text: str
     ideal_answer: str
     student_answer: str

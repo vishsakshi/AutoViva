@@ -31,8 +31,6 @@ class EvaluationEngineModule1:
     def validate_request(self, req: EvaluateAnswerRequest) -> Tuple[bool, str]:
         if not req.question_text.strip():
             return False, "Question text cannot be empty."
-        if not req.ideal_answer.strip():
-            return False, "Ideal answer cannot be empty."
         if not req.student_answer.strip():
             return False, "Student answer cannot be empty."
         if not req.evaluation_rubric or len(req.evaluation_rubric) == 0:
@@ -41,6 +39,9 @@ class EvaluationEngineModule1:
 
     def evaluate_answer_module1(self, req: EvaluateAnswerRequest) -> EvaluationModule1Response:
         start_time = time.perf_counter()
+
+        if not (req.ideal_answer or "").strip():
+            req.ideal_answer = (req.question_text or "").strip()
 
         is_valid, err = self.validate_request(req)
         if not is_valid:

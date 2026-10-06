@@ -86,6 +86,20 @@ async def get_all_evaluations():
     """GET all evaluations."""
     return evaluation_review_service.get_all_evaluations()
 
+@router.get("/by-student/{student_id}", response_model=List[FullEvaluationRecord])
+async def get_evaluations_by_student(student_id: str):
+    """GET all evaluations for a specific student."""
+    return [r for r in evaluation_review_service.get_all_evaluations() if r.student_id == student_id]
+
+@router.get("/by-viva/{viva_id}", response_model=List[FullEvaluationRecord])
+async def get_evaluations_by_viva(viva_id: str):
+    """GET all evaluations for a specific viva session."""
+    all_evals = evaluation_review_service.get_all_evaluations()
+    return [
+        r for r in all_evals
+        if getattr(r, "viva_id", None) == viva_id or (r.question_id or "").startswith(viva_id)
+    ]
+
 @router.get("/{eval_id}", response_model=FullEvaluationRecord)
 async def get_evaluation_details(eval_id: str):
     """GET details of a specific evaluation including AI v1, Faculty v2, and Audit History."""

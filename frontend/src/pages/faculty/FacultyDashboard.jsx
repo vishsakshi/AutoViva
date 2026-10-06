@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, FileCheck, ArrowRight, PlusCircle, Trash2, BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
-import { getApiUrl } from '../../services/api';
+import { getApiUrl, getAuthHeaders } from '../../services/api';
 
 export default function FacultyDashboard() {
   const [publishedVivas, setPublishedVivas] = useState([]);
@@ -35,11 +35,10 @@ export default function FacultyDashboard() {
     setDeletingId(vivaId);
 
     try {
-      const token = localStorage.getItem('autoviva_jwt_token') || sessionStorage.getItem('autoviva_jwt_token');
-      const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const headers = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      };
 
       const res = await fetch(getApiUrl(`/api/viva/${vivaId}`), {
         method: 'DELETE',
@@ -51,8 +50,8 @@ export default function FacultyDashboard() {
         setPublishedVivas(prev => prev.filter(v => v.viva_id !== vivaId));
         setDeleteModalViva(null);
       } else {
-        const errData = await res.json();
-        setToast({ type: 'error', text: errData.detail || 'Failed to delete examination.' });
+        const errData = await res.json().catch(() => null);
+        setToast({ type: 'error', text: errData?.detail || 'Failed to delete examination.' });
       }
     } catch (err) {
       setToast({ type: 'error', text: 'Server connection error during deletion.' });

@@ -13,12 +13,12 @@ export default function CreateVivaSession() {
   const [step, setStep] = useState(1);
 
   // STEP 1: Viva Metadata (Preserved across Step 1 <-> 2 <-> 3 <-> 4)
-  const [subject, setSubject] = useState('Computer Networks');
+  const [subject, setSubject] = useState('');
   const [courseCode, setCourseCode] = useState('CS301');
   const [topic, setTopic] = useState('IP Addressing, NAT & NAPT');
   const [questionCount, setQuestionCount] = useState(3);
   const [durationMinutes, setDurationMinutes] = useState(15);
-  const [batch, setBatch] = useState('Batch 2026');
+  const [batch, setBatch] = useState('');
 
   // Viva Record & Uploaded File Metadata List
   const [vivaRecord, setVivaRecord] = useState(null);
@@ -376,7 +376,6 @@ export default function CreateVivaSession() {
                   required
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  placeholder="e.g. Computer Networks"
                   className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:border-[#0F766E] focus:outline-none transition-all"
                 />
               </div>
@@ -403,17 +402,6 @@ export default function CreateVivaSession() {
                 placeholder="e.g. IP Addressing, NAT & NAPT"
                 className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:border-[#0F766E] focus:outline-none transition-all"
               />
-            </div>
-
-            {/* Balanced Paper Auto Distribution Banner (No Manual Difficulty Selector) */}
-            <div className="p-3.5 rounded-2xl bg-teal-50/70 border border-teal-200/80 text-teal-900 flex items-start gap-2.5">
-              <Sparkles className="w-4 h-4 text-[#0F766E] shrink-0 mt-0.5" />
-              <div className="space-y-0.5">
-                <span className="font-bold text-xs block text-[#0F766E]">Automatic Balanced Question Paper</span>
-                <p className="text-[11px] text-teal-800 leading-relaxed">
-                  Questions are generated automatically with a balanced academic difficulty mix (~30% Easy, ~40% Medium, ~30% Hard) grounded in uploaded syllabus material. Manual difficulty selection is disabled.
-                </p>
-              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -450,7 +438,6 @@ export default function CreateVivaSession() {
                   required
                   value={batch}
                   onChange={(e) => setBatch(e.target.value)}
-                  placeholder="e.g. Batch 2026"
                   className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:border-[#0F766E] focus:outline-none transition-all"
                 />
               </div>

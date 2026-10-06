@@ -1,5 +1,10 @@
+import os
 import sys
 import io
+
+os.environ["USE_TF"] = "0"
+os.environ["USE_TORCH"] = "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 if hasattr(sys.stdout, 'reconfigure'):
     try:
@@ -18,6 +23,7 @@ if hasattr(sys.stderr, 'reconfigure'):
             sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 elif hasattr(sys.stderr, 'buffer'):
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI

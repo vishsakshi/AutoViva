@@ -22,10 +22,21 @@ class VectorStore:
             path=self.persist_directory,
             settings=ChromaSettings(anonymized_telemetry=False)
         )
-        self.collection = self.client.get_or_create_collection(
-            name=self.collection_name,
-            metadata={"hnsw:space": "cosine"}
-        )
+        try:
+            self.collection = self.client.get_or_create_collection(
+                name=self.collection_name,
+                metadata={"hnsw:space": "cosine"}
+            )
+        except (KeyError, Exception) as ke:
+            logger.warning(f"ChromaDB collection load issue ({ke}), recovering collection...")
+            try:
+                self.client.delete_collection(self.collection_name)
+            except Exception:
+                pass
+            self.collection = self.client.get_or_create_collection(
+                name=self.collection_name,
+                metadata={"hnsw:space": "cosine"}
+            )
         logger.info(f"ChromaDB collection '{self.collection_name}' ready with {self.collection.count()} vectors.")
 
     def add_chunks(self, chunks: List[Dict[str, Any]], embeddings: List[List[float]]):
@@ -168,4 +179,16 @@ class VectorStore:
             "storage_path": self.persist_directory
         }
 
-vector_store = VectorStore()
+_vector_store_instance = None
+
+def get_vector_store() -> VectorStore:
+    global _vector_store_instance
+    if _vector_store_instance is None:
+        _vector_store_instance = VectorStore()
+    return _vector_store_instance
+
+class ProxyVectorStore:
+    def __getattr__(self, name):
+        return getattr(get_vector_store(), name)
+
+vector_store = ProxyVectorStore()

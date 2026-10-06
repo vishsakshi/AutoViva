@@ -100,10 +100,14 @@ def get_all_vivas():
 
 @router.delete("/{viva_id}")
 def delete_viva(viva_id: str, authorization: Optional[str] = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
+    if not authorization or not authorization.strip().lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized: Missing or invalid authorization header.")
     
-    token = authorization.split(" ")[1]
+    parts = authorization.strip().split()
+    if len(parts) < 2:
+        raise HTTPException(status_code=401, detail="Unauthorized: Missing or invalid authorization header.")
+
+    token = parts[1]
     decoded = auth_service.decode_token(token)
     if not decoded:
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid or expired access token.")

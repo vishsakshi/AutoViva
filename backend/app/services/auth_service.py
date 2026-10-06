@@ -23,7 +23,7 @@ class AuthService:
 
     def _init_mongo_client(self):
         try:
-            self.mongo_client = pymongo.MongoClient(settings.MONGO_URI, serverSelectionTimeoutMS=2000)
+            self.mongo_client = pymongo.MongoClient(settings.MONGO_URI, serverSelectionTimeoutMS=10000)
             self.db = self.mongo_client[settings.DB_NAME]
             self.users_col = self.db["users"]
             # Ensure unique index on email
@@ -33,6 +33,11 @@ class AuthService:
             logger.warning(f"AuthService Mongo init notice: {e}")
             self.db = None
             self.users_col = None
+
+    def get_users_col(self):
+        if self.users_col is None:
+            self._init_mongo_client()
+        return self.users_col
 
     def hash_password(self, password: str) -> str:
         return pwd_context.hash(password)
@@ -64,9 +69,9 @@ class AuthService:
 
         email_clean = req.email.strip().lower()
 
-        # Check existing user in MongoDB
-        if self.users_col is not None:
-            existing = self.users_col.find_one({"email": email_clean})
+        col = self.get_users_col()
+        if col is not None:
+            existing = col.find_one({"email": email_clean})
             if existing:
                 raise ValueError("An account with this email address already exists. Please sign in.")
 
@@ -83,8 +88,8 @@ class AuthService:
             "created_at": now
         }
 
-        if self.users_col is not None:
-            self.users_col.insert_one(user_doc)
+        if col is not None:
+            col.insert_one(user_doc)
             logger.info(f"Created MongoDB user: {email_clean} (ID: {user_id}, Role: {req.role.value})")
 
         user_resp = UserResponse(
@@ -100,9 +105,10 @@ class AuthService:
     def authenticate_user(self, req: UserLoginRequest) -> TokenResponse:
         email_clean = req.email.strip().lower()
 
+        col = self.get_users_col()
         user_doc = None
-        if self.users_col is not None:
-            user_doc = self.users_col.find_one({"email": email_clean})
+        if col is not None:
+            user_doc = col.find_one({"email": email_clean})
 
         if not user_doc:
             raise ValueError("No account registered with this email. Please check your email or create an account.")

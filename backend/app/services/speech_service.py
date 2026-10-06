@@ -42,24 +42,29 @@ class SpeechToTextService:
         self._ensure_whisper_loaded()
 
         if self.use_whisper_pkg and self.whisper_model:
+            temp_filename = None
             try:
-                temp_filename = f"temp_{os.urandom(4).hex()}.webm"
+                ext = os.path.splitext(filename or "")[1] or ".webm"
+                temp_filename = f"temp_{os.urandom(4).hex()}{ext}"
                 with open(temp_filename, "wb") as f:
                     f.write(audio_bytes)
 
                 result = self.whisper_model.transcribe(temp_filename)
-                
-                if os.path.exists(temp_filename):
-                    os.remove(temp_filename)
-
-                transcript = result.get("text", "").strip()
-                if transcript:
-                    return transcript
+                transcript = (result.get("text") or "").strip()
+                return transcript
             except Exception as ex:
-                logger.error(f"Whisper model transcription failed: {ex}. Falling back.")
+                logger.error(f"Whisper model transcription failed: {ex}.")
+                return ""
+            finally:
+                if temp_filename and os.path.exists(temp_filename):
+                    try:
+                        os.remove(temp_filename)
+                    except OSError:
+                        pass
 
-        # High-accuracy fallback transcript decoder for test audio streams
-        logger.info("Decoding audio stream using precision speech processor...")
-        return "Private IP addresses are used inside local networks while public IP addresses are routed on the internet. NAPT uses port numbers alongside public IP addresses to map multiple internal device connections."
+        # Whisper is optional. Never invent a canned answer — the live session
+        # uses browser speech recognition and will keep that transcript.
+        logger.warning("Whisper is unavailable; returning empty transcript for client-side STT.")
+        return ""
 
 speech_to_text_service = SpeechToTextService()

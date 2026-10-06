@@ -18,6 +18,10 @@ class EvaluateAnswerRequest(BaseModel):
     student_answer: str = Field(..., description="Student's submitted oral/written answer")
     subject: Optional[str] = "Computer Networks"
     topic: Optional[str] = "IP Addressing & NAT"
+    # Passed by the student frontend so evaluations are keyed to the right question/student
+    question_id: Optional[str] = "vq_com_ip_4198fe"
+    student_id: Optional[str] = "std_anonymous"
+    viva_id: Optional[str] = None
 
 class CriterionEvaluationOutput(BaseModel):
     criterion_id: str

@@ -295,21 +295,23 @@ class QuestionVerifier:
         is_duplicate = False
         if existing_questions and len(existing_questions) > 0:
             q_topic_words = set([w.lower() for w in re.findall(r"\b[a-zA-Z]{4,}\b", q_clean) if w.lower() not in ignore_words])
-            q_vec = np.array(embedding_service.generate_query_embedding(q_clean))
+            
+            # Fast Jaccard string similarity check first
             for prev_q in existing_questions:
                 prev_topic_words = set([w.lower() for w in re.findall(r"\b[a-zA-Z]{4,}\b", prev_q) if w.lower() not in ignore_words])
-                if q_topic_words and prev_topic_words and not q_topic_words.intersection(prev_topic_words):
-                    continue
-                prev_vec = np.array(embedding_service.generate_query_embedding(prev_q))
-                sim = float(np.dot(q_vec, prev_vec) / (np.linalg.norm(q_vec) * np.linalg.norm(prev_vec)))
-                if sim >= 0.85:
-                    is_duplicate = True
-                    is_valid = False
-                    reasons.append(f"Duplicate question detected (Cosine similarity: {sim:.3f} >= threshold 0.85).")
-                    break
+                if q_topic_words and prev_topic_words:
+                    intersection = q_topic_words.intersection(prev_topic_words)
+                    jaccard = len(intersection) / max(1, len(q_topic_words.union(prev_topic_words)))
+                    if jaccard >= 0.75:
+                        is_duplicate = True
+                        is_valid = False
+                        reasons.append(f"Duplicate question detected (Jaccard similarity: {jaccard:.2f} >= 0.75).")
+                        break
 
-        # --- L. LLM-AS-A-JUDGE SEMANTIC VALIDATION (IF REMOTE LLM ACTIVE) ---
-        if is_valid and llm_service.is_configured():
+        # --- L. OPTIONAL LLM-AS-A-JUDGE SEMANTIC VALIDATION ---
+        # Run secondary LLM judge only if grounding score is borderline (< 0.45)
+        g_score_val = grounding_score if 'grounding_score' in locals() else 0.85
+        if is_valid and g_score_val < 0.45 and llm_service.is_configured():
             llm_judge_res = llm_service.validate_question_and_answer_pair(
                 question_text=q_clean,
                 ideal_answer=ans_clean,

@@ -6,6 +6,7 @@ import FacultyDashboard from './pages/faculty/FacultyDashboard';
 import EvaluationReview from './pages/faculty/EvaluationReview';
 import CreateVivaSession from './pages/faculty/CreateVivaSession';
 import StudentDashboard from './pages/student/StudentDashboard';
+import PreVivaInstructions from './pages/student/PreVivaInstructions';
 import LiveVivaSession from './pages/student/LiveVivaSession';
 
 function HeaderNav() {
@@ -124,6 +125,11 @@ export default function App() {
             <Route path="/login" element={<Login />} />
 
             {/* Protected Student Routes */}
+            <Route path="/student/viva/pre" element={
+              <ProtectedRoute allowedRole="student">
+                <PreVivaInstructions />
+              </ProtectedRoute>
+            } />
             <Route path="/student/viva" element={
               <ProtectedRoute allowedRole="student">
                 <LiveVivaSession />
