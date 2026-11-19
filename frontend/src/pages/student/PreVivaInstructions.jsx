@@ -11,6 +11,7 @@ export default function PreVivaInstructions() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const vivaId = searchParams.get('viva_id') || '';
+  const resumeAttempt = searchParams.get('resume') === '1';
 
   const [vivaInfo, setVivaInfo] = useState(null);
   const [questionCount, setQuestionCount] = useState(null);
@@ -80,7 +81,25 @@ export default function PreVivaInstructions() {
   const canBegin = micChecked && readyChecked && !loadError && questionCount !== null;
 
   const handleBeginViva = () => {
-    const dest = vivaId ? `/student/viva?viva_id=${encodeURIComponent(vivaId)}` : '/student/viva';
+    let user = {};
+    let savedProgress = null;
+    try {
+      user = JSON.parse(localStorage.getItem('autoviva_user') || '{}');
+      if (resumeAttempt && vivaId) {
+        savedProgress = JSON.parse(
+          localStorage.getItem(`autoviva_progress_${vivaId}_${user.user_id || 'std_anonymous'}`) || 'null'
+        );
+      }
+    } catch {
+      savedProgress = null;
+    }
+    const attemptId = savedProgress?.attempt_id || crypto.randomUUID();
+    const attemptStartedAt = savedProgress?.attempt_started_at || new Date().toISOString();
+    const params = new URLSearchParams();
+    if (vivaId) params.set('viva_id', vivaId);
+    params.set('attempt_id', attemptId);
+    params.set('attempt_started_at', attemptStartedAt);
+    const dest = `/student/viva?${params.toString()}`;
     navigate(dest);
   };
 

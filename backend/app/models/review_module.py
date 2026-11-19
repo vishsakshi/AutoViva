@@ -37,6 +37,9 @@ class FullEvaluationRecord(BaseModel):
     question_id: Optional[str] = "vq_com_ip_4198fe"
     student_id: Optional[str] = "std_10293"
     viva_id: Optional[str] = None
+    attempt_id: Optional[str] = None
+    attempt_started_at: Optional[str] = None
+    question_number: Optional[int] = None
     question_text: str
     ideal_answer: str
     student_answer: str
@@ -46,3 +49,19 @@ class FullEvaluationRecord(BaseModel):
     faculty_version_v2: Optional[FeedbackModule3Response] = None
     audit_history: List[FacultyAuditLogEntry] = []
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class EvaluationSessionGroup(BaseModel):
+    session_id: str
+    attempt_id: Optional[str] = None
+    legacy: bool = False
+    student_id: Optional[str] = None
+    student_name: Optional[str] = None
+    viva_id: Optional[str] = None
+    viva_title: str
+    course_code: Optional[str] = None
+    started_at: Optional[str] = None
+    question_count: int
+    total_marks: float
+    max_marks: float
+    status: str
+    evaluations: List[FullEvaluationRecord]

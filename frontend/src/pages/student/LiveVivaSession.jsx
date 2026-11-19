@@ -26,8 +26,9 @@ import { facialExpressionAnalyzer } from '../../services/facialExpressionAnalyze
 
 const VIVA_STORAGE_KEY = 'autoviva_progress'; // localStorage key
 const VIDEO_FRAME_STYLE = {
-  height: 'clamp(180px, 24vh, 220px)',
-  width: 'min(100%, calc(clamp(180px, 24vh, 220px) * 16 / 9))',
+  width: '100%',
+  height: 'auto',
+  aspectRatio: '16 / 10',
 };
 
 // Helpers
@@ -208,6 +209,8 @@ export default function LiveVivaSession() {
   // --- Viva session metadata from URL ---
   const searchParams = new URLSearchParams(location.search);
   const vivaId = searchParams.get('viva_id') || '';
+  const [attemptId] = useState(() => searchParams.get('attempt_id') || crypto.randomUUID());
+  const [attemptStartedAt] = useState(() => searchParams.get('attempt_started_at') || new Date().toISOString());
   const user = getUserFromStorage();
   const studentId = user.user_id || 'std_anonymous';
 
@@ -281,10 +284,12 @@ export default function LiveVivaSession() {
         currentIdx: idx,
         submittedIds: submitted,
         completedAt: completedTimestamp,
+        attempt_id: attemptId,
+        attempt_started_at: attemptStartedAt,
         savedAt: Date.now(),
       }));
     } catch (_) {}
-  }, [persistenceKey]);
+  }, [attemptId, attemptStartedAt, persistenceKey]);
 
   const loadProgress = useCallback(() => {
     try {
@@ -337,7 +342,12 @@ export default function LiveVivaSession() {
         let resumeSubmitted = {};
         let resumeCompleted = null;
 
-        if (saved && saved.savedAt && Date.now() - saved.savedAt < 3 * 60 * 60 * 1000) {
+        if (
+          saved &&
+          saved.attempt_id === attemptId &&
+          saved.savedAt &&
+          Date.now() - saved.savedAt < 3 * 60 * 60 * 1000
+        ) {
           resumeIdx = Math.min(saved.currentIdx || 0, data.length - 1);
           resumeSubmitted = saved.submittedIds || {};
           resumeCompleted = saved.completedAt || null;
@@ -718,6 +728,9 @@ export default function LiveVivaSession() {
         question_id: question.question_id || '',
         student_id: studentId,
         viva_id: vivaId || '',
+        attempt_id: attemptId,
+        attempt_started_at: attemptStartedAt,
+        question_number: currentIdx + 1,
       };
 
       const res = await fetch(getApiUrl('/api/evaluation/submit'), {

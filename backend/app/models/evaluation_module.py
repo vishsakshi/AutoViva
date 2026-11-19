@@ -22,6 +22,9 @@ class EvaluateAnswerRequest(BaseModel):
     question_id: Optional[str] = "vq_com_ip_4198fe"
     student_id: Optional[str] = "std_anonymous"
     viva_id: Optional[str] = None
+    attempt_id: Optional[str] = None
+    attempt_started_at: Optional[str] = None
+    question_number: Optional[int] = None
 
 class CriterionEvaluationOutput(BaseModel):
     criterion_id: str

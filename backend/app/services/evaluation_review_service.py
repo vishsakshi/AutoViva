@@ -15,6 +15,7 @@ from app.models.review_module import (
 from app.services.evaluation_engine import evaluation_engine_module1
 from app.services.scoring_engine import scoring_engine_module2
 from app.services.feedback_engine import feedback_engine_module3
+from app.services.evaluation_session_grouping import group_evaluation_records
 
 logger = logging.getLogger("vivabot.services.evaluation_review")
 
@@ -67,6 +68,9 @@ class EvaluationReviewServiceModule4:
             question_id=effective_question_id,
             student_id=effective_student_id,
             viva_id=req.viva_id,
+            attempt_id=req.attempt_id,
+            attempt_started_at=req.attempt_started_at,
+            question_number=req.question_number,
             question_text=req.question_text,
             ideal_answer=req.ideal_answer,
             student_answer=req.student_answer,
@@ -86,6 +90,9 @@ class EvaluationReviewServiceModule4:
 
     def get_all_evaluations(self) -> List[FullEvaluationRecord]:
         return list(self.evaluations_db.values())
+
+    def get_session_groups(self) -> List[Dict[str, Any]]:
+        return group_evaluation_records(self.get_all_evaluations())
 
 
     def get_evaluation_by_id(self, eval_id: str) -> Optional[FullEvaluationRecord]:

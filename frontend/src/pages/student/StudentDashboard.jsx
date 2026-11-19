@@ -74,9 +74,10 @@ export default function StudentDashboard() {
     );
   };
 
-  const handleStartViva = (vivaId) => {
-    // Route through pre-viva instructions screen, passing viva_id
-    navigate(`/student/viva/pre?viva_id=${encodeURIComponent(vivaId)}`);
+  const handleStartViva = (vivaId, resume = false) => {
+    const params = new URLSearchParams({ viva_id: vivaId });
+    if (resume) params.set('resume', '1');
+    navigate(`/student/viva/pre?${params.toString()}`);
   };
 
   return (
@@ -236,7 +237,7 @@ export default function StudentDashboard() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => handleStartViva(v.viva_id)}
+                      onClick={() => handleStartViva(v.viva_id, isInProgress)}
                       className="w-full py-2.5 bg-[#0F766E] hover:bg-[#0D645D] text-white text-xs font-bold rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#0F766E]/15 transition-all"
                     >
                       {isInProgress ? (

@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status
 from app.models.evaluation_module import EvaluateAnswerRequest, EvaluationModule1Response
@@ -5,6 +6,7 @@ from app.models.scoring_module import ScoringModule2Response
 from app.models.feedback_module import GenerateFeedbackRequest, FeedbackModule3Response
 from app.models.review_module import (
     FullEvaluationRecord,
+    EvaluationSessionGroup,
     FacultyOverrideRequest,
     FacultyAuditLogEntry
 )
@@ -13,6 +15,7 @@ from app.services.scoring_engine import scoring_engine_module2
 from app.services.feedback_engine import feedback_engine_module3
 from app.services.evaluation_review_service import evaluation_review_service
 
+logger = logging.getLogger("autoviva.routes.evaluation")
 router = APIRouter(prefix="/evaluation", tags=["Answer Evaluation Engine"])
 
 @router.post("/evaluate-raw", response_model=EvaluationModule1Response)
@@ -86,6 +89,36 @@ async def get_all_evaluations():
     """GET all evaluations."""
     return evaluation_review_service.get_all_evaluations()
 
+@router.get("/sessions", response_model=List[EvaluationSessionGroup])
+async def get_evaluation_sessions():
+    """GET evaluations grouped by the student's actual viva attempt."""
+    from app.services.auth_service import auth_service
+    from app.services.viva_creation_service import viva_creation_service
+
+    sessions = evaluation_review_service.get_session_groups()
+    users_col = auth_service.get_users_col()
+    for session in sessions:
+        if session["student_id"] and users_col is not None:
+            try:
+                student = users_col.find_one(
+                    {"user_id": session["student_id"]},
+                    {"name": 1, "_id": 0},
+                )
+                if student:
+                    session["student_name"] = student.get("name")
+            except Exception:
+                logger.exception("Could not load student name for evaluation session.")
+
+        viva = viva_creation_service.get_viva(session["viva_id"]) if session["viva_id"] else None
+        if viva:
+            session["course_code"] = viva.course_code
+            session["viva_title"] = " · ".join(
+                value for value in (viva.subject, viva.course_code) if value
+            ) or viva.viva_id
+        else:
+            session["viva_title"] = session["viva_id"] or "Viva unavailable"
+    return sessions
+
 @router.get("/by-student/{student_id}", response_model=List[FullEvaluationRecord])
 async def get_evaluations_by_student(student_id: str):
     """GET all evaluations for a specific student."""
@@ -143,6 +176,5 @@ async def get_evaluation_history(eval_id: str):
     if not record:
         raise HTTPException(status_code=404, detail=f"Evaluation '{eval_id}' not found.")
     return record.audit_history
-
 
 
