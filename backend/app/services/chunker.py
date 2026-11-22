@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
-logger = logging.getLogger("vivabot.services.chunker")
+logger = logging.getLogger("autoviva.services.chunker")
 
 class DocumentChunker:
     """

@@ -23,6 +23,8 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [completedVivas, setCompletedVivas] = useState({});
+  const [publishedMarks, setPublishedMarks] = useState([]);
+  const [publishedMarksLoading, setPublishedMarksLoading] = useState(true);
 
   const fetchPublished = async () => {
     setLoading(true);
@@ -42,7 +44,30 @@ export default function StudentDashboard() {
   useEffect(() => {
     fetchPublished();
     setCompletedVivas(getCompletedVivas());
+    fetchPublishedMarks();
   }, []);
+
+  const fetchPublishedMarks = async () => {
+    setPublishedMarksLoading(true);
+    try {
+      const studentId = user.user_id || '';
+      if (!studentId) {
+        setPublishedMarks([]);
+        return;
+      }
+      const res = await fetch(
+        getApiUrl(`/api/evaluation/published-sessions/by-student/${encodeURIComponent(studentId)}`),
+        { headers: getAuthHeaders() }
+      );
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const data = await res.json();
+      setPublishedMarks(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setPublishedMarks([]);
+    } finally {
+      setPublishedMarksLoading(false);
+    }
+  };
 
   const getVivaStatus = (vivaId) => {
     const completed = completedVivas[vivaId];
@@ -107,6 +132,68 @@ export default function StudentDashboard() {
           </span>
         </div>
       </div>
+
+      <section className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <Award className="w-5 h-5 text-[#0F766E]" /> Published Viva Marks
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Results approved and published by your faculty.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={fetchPublishedMarks}
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {publishedMarksLoading ? (
+          <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-[#0F766E]" /> Loading published marks…
+          </div>
+        ) : publishedMarks.length === 0 ? (
+          <div className="p-5 bg-[#F8FAFC] border border-slate-200/80 rounded-2xl text-center text-xs text-slate-500 italic">
+            No viva marks have been published yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {publishedMarks.map((session) => {
+              const percentage = session.max_marks > 0
+                ? ((session.total_marks / session.max_marks) * 100).toFixed(1)
+                : '0.0';
+              return (
+                <article key={session.session_id} className="p-5 bg-emerald-50/60 border border-emerald-200 rounded-2xl space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{session.viva_title}</p>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        {session.question_count} question{session.question_count === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                    <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold">
+                      PUBLISHED
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between border-t border-emerald-200 pt-3">
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase font-bold">Your Marks</p>
+                      <p className="text-xl font-black text-emerald-700 font-mono">
+                        {session.total_marks} / {session.max_marks}
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">{percentage}%</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Loading state */}
       {loading && (

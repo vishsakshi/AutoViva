@@ -3,6 +3,7 @@ import time
 import uuid
 import logging
 import pymongo
+from pymongo.errors import PyMongoError
 from passlib.context import CryptContext
 from typing import Optional, Dict, Any
 
@@ -20,6 +21,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class AuthService:
     def __init__(self):
         self._init_mongo_client()
+        self.ensure_demo_accounts()
 
     def _init_mongo_client(self):
         try:
@@ -33,6 +35,40 @@ class AuthService:
             logger.warning(f"AuthService Mongo init notice: {e}")
             self.db = None
             self.users_col = None
+
+    def ensure_demo_accounts(self) -> None:
+        col = self.get_users_col()
+        if col is None:
+            return
+
+        demo_accounts = [
+            {
+                "name": "Demo Student",
+                "email": "student@autoviva.edu",
+                "password": "student123",
+                "role": "student",
+            },
+            {
+                "name": "Demo Faculty",
+                "email": "faculty@autoviva.edu",
+                "password": "faculty123",
+                "role": "faculty",
+            },
+        ]
+
+        for account in demo_accounts:
+            if col.find_one({"email": account["email"]}):
+                continue
+            user_id = f"usr_{uuid.uuid4().hex[:8]}"
+            col.insert_one({
+                "user_id": user_id,
+                "name": account["name"],
+                "email": account["email"],
+                "hashed_password": self.hash_password(account["password"]),
+                "role": account["role"],
+                "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            logger.info("Created demo %s account: %s", account["role"], account["email"])
 
     def get_users_col(self):
         if self.users_col is None:
@@ -70,10 +106,12 @@ class AuthService:
         email_clean = req.email.strip().lower()
 
         col = self.get_users_col()
-        if col is not None:
-            existing = col.find_one({"email": email_clean})
-            if existing:
-                raise ValueError("An account with this email address already exists. Please sign in.")
+        if col is None:
+            raise PyMongoError("MongoDB is unavailable. Account registration could not be persisted.")
+
+        existing = col.find_one({"email": email_clean})
+        if existing:
+            raise ValueError("An account with this email address already exists. Please sign in.")
 
         user_id = f"usr_{uuid.uuid4().hex[:8]}"
         hashed_pwd = self.hash_password(req.password)

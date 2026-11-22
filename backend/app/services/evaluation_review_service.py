@@ -1,6 +1,7 @@
 import copy
 import uuid
 import logging
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
 from app.models.evaluation_module import EvaluateAnswerRequest
@@ -17,7 +18,7 @@ from app.services.scoring_engine import scoring_engine_module2
 from app.services.feedback_engine import feedback_engine_module3
 from app.services.evaluation_session_grouping import group_evaluation_records
 
-logger = logging.getLogger("vivabot.services.evaluation_review")
+logger = logging.getLogger("autoviva.services.evaluation_review")
 
 class EvaluationReviewServiceModule4:
     """
@@ -32,6 +33,35 @@ class EvaluationReviewServiceModule4:
         # Storage for evaluation records and audit history
         self.evaluations_db: Dict[str, FullEvaluationRecord] = {}
         self.global_audit_logs: List[FacultyAuditLogEntry] = []
+        self.evaluations_col = None
+        self._load_persistent_evaluations()
+
+    def _load_persistent_evaluations(self) -> None:
+        try:
+            from app.services.auth_service import auth_service
+            if auth_service.db is None:
+                return
+            self.evaluations_col = auth_service.db["evaluation_records"]
+            self.evaluations_col.create_index("evaluation_id", unique=True)
+            for document in self.evaluations_col.find({}):
+                document.pop("_id", None)
+                record = FullEvaluationRecord.model_validate(document)
+                self.evaluations_db[record.evaluation_id] = record
+        except Exception as exc:
+            logger.warning("Could not load persisted evaluation records: %s", exc)
+
+    def _persist_evaluation(self, record: FullEvaluationRecord) -> None:
+        if self.evaluations_col is None:
+            return
+        try:
+            document = record.model_dump(mode="json")
+            self.evaluations_col.replace_one(
+                {"evaluation_id": record.evaluation_id},
+                document,
+                upsert=True,
+            )
+        except Exception as exc:
+            logger.warning("Could not persist evaluation %s: %s", record.evaluation_id, exc)
 
     def submit_student_answer_pipeline(
         self,
@@ -82,6 +112,7 @@ class EvaluationReviewServiceModule4:
         )
 
         self.evaluations_db[record.evaluation_id] = record
+        self._persist_evaluation(record)
         logger.info(f"Pipeline Submission complete [{record.evaluation_id}]: Staged PENDING_REVIEW. AI Score={fb_res.evaluation_summary.final_score}/10.")
         return record
 
@@ -93,6 +124,43 @@ class EvaluationReviewServiceModule4:
 
     def get_session_groups(self) -> List[Dict[str, Any]]:
         return group_evaluation_records(self.get_all_evaluations())
+
+    def get_published_sessions(self) -> List[Dict[str, Any]]:
+        published_records = [
+            record for record in self.get_all_evaluations()
+            if record.status == EvaluationStatus.PUBLISHED
+        ]
+        return group_evaluation_records(published_records)
+
+    def get_published_sessions_by_student(self, student_id: str) -> List[Dict[str, Any]]:
+        return [
+            session for session in self.get_published_sessions()
+            if session["student_id"] == student_id
+        ]
+
+    def publish_session(self, session_id: str, faculty_id: str = "") -> List[Dict[str, Any]]:
+        matching = []
+        for record in self.get_all_evaluations():
+            record_session_id = record.attempt_id or f"legacy:{record.evaluation_id}"
+            if record_session_id == session_id:
+                matching.append(record)
+        if not matching:
+            raise ValueError("Viva attempt not found.")
+
+        eligible_statuses = {
+            EvaluationStatus.APPROVED,
+            EvaluationStatus.OVERRIDDEN,
+        }
+        if any(record.status not in eligible_statuses for record in matching):
+            raise ValueError("Publish only after every question has been approved or overridden.")
+
+        published_at = datetime.now(timezone.utc).isoformat()
+        for record in matching:
+            record.status = EvaluationStatus.PUBLISHED
+            record.published_at = published_at
+            record.published_by = faculty_id or None
+            self._persist_evaluation(record)
+        return self.get_published_sessions()
 
 
     def get_evaluation_by_id(self, eval_id: str) -> Optional[FullEvaluationRecord]:
@@ -142,6 +210,7 @@ class EvaluationReviewServiceModule4:
             reason="Faculty approved AI evaluation without score edits.",
             comment=faculty_comment
         )
+        self._persist_evaluation(record)
         logger.info(f"Evaluation [{eval_id}] APPROVED by faculty.")
         return record
 
@@ -161,6 +230,7 @@ class EvaluationReviewServiceModule4:
             reason=reason_for_change,
             comment=faculty_comment
         )
+        self._persist_evaluation(record)
         logger.info(f"Evaluation [{eval_id}] REJECTED by faculty.")
         return record
 
@@ -209,6 +279,7 @@ class EvaluationReviewServiceModule4:
             reason=req.reason_for_change or "Faculty modified evaluation score.",
             comment=req.faculty_comment or ""
         )
+        self._persist_evaluation(record)
 
         logger.info(f"Evaluation [{eval_id}] OVERRIDDEN: Version 1 ({prev_score}) -> Version 2 ({new_score}). Version 1 preserved.")
         return record

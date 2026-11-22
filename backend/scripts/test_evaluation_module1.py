@@ -5,7 +5,7 @@ from app.services.evaluation_engine import evaluation_engine_module1
 
 def main():
     print("=" * 80)
-    print("VIVABOT PHASE 4 - MODULE 1: EVALUATION API TEST SUITE")
+    print("AUTOVIVA PHASE 4 - MODULE 1: EVALUATION API TEST SUITE")
     print("=" * 80)
 
     # 1. Sample Evaluation Input

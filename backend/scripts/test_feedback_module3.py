@@ -8,7 +8,7 @@ from app.services.feedback_engine import feedback_engine_module3
 
 def run_feedback_unit_tests():
     print("=" * 80)
-    print("VIVABOT PHASE 4 - MODULE 3: EVIDENCE VALIDATION & FEEDBACK ENGINE TEST SUITE")
+    print("AUTOVIVA PHASE 4 - MODULE 3: EVIDENCE VALIDATION & FEEDBACK ENGINE TEST SUITE")
     print("=" * 80)
 
     # Base Question & Rubric

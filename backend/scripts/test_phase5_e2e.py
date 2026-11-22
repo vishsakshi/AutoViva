@@ -13,7 +13,7 @@ from app.services.evaluation_review_service import evaluation_review_service
 
 def run_phase5_e2e_demo():
     print("=" * 90)
-    print("VIVABOT PHASE 5: COMPLETE SYSTEM INTEGRATION & END-TO-END PIPELINE VALIDATION")
+    print("AUTOVIVA PHASE 5: COMPLETE SYSTEM INTEGRATION & END-TO-END PIPELINE VALIDATION")
     print("=" * 90)
 
     tracemalloc.start()
@@ -168,7 +168,7 @@ def run_phase5_e2e_demo():
     # STEP 5: PERFORMANCE MEASUREMENTS SUMMARY
     # --------------------------------------------------------------------------------
     print("\n" + "=" * 80)
-    print("STEP 5: VIVABOT SYSTEM PERFORMANCE BENCHMARKS")
+    print("STEP 5: AUTOVIVA SYSTEM PERFORMANCE BENCHMARKS")
     print("=" * 80)
     print(f"Retrieval Latency:           {t_retrieval} ms")
     print(f"Question Generation Latency: {t_gen} ms")

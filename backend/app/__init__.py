@@ -1,4 +1,4 @@
-# VivaBot App Package
+# AutoViva App Package
 import sys
 import io
 

@@ -118,7 +118,7 @@ def generate_computer_networks_pdf(filepath: str):
 
 def main():
     print("=" * 80)
-    print("VIVABOT PHASE 2: RETRIEVAL VALIDATION & CONTEXT CONSTRUCTION")
+    print("AUTOVIVA PHASE 2: RETRIEVAL VALIDATION & CONTEXT CONSTRUCTION")
     print("=" * 80)
 
     pdf_file = "computer_networks_textbook.pdf"

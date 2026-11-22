@@ -4,7 +4,7 @@ from app.services.scoring_engine import scoring_engine_module2
 
 def run_unit_tests():
     print("=" * 80)
-    print("VIVABOT PHASE 4 - MODULE 2: DETERMINISTIC SCORING ENGINE TEST SUITE")
+    print("AUTOVIVA PHASE 4 - MODULE 2: DETERMINISTIC SCORING ENGINE TEST SUITE")
     print("=" * 80)
 
     # TEST CASE 1: All Criteria Supported

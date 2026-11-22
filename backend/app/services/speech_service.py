@@ -4,7 +4,7 @@ import wave
 import logging
 from typing import Dict, Any, Optional
 
-logger = logging.getLogger("vivabot.services.speech_service")
+logger = logging.getLogger("autoviva.services.speech_service")
 
 class SpeechToTextService:
     """

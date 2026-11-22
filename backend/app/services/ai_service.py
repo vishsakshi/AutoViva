@@ -2,7 +2,7 @@ import logging
 from typing import Dict, Any, List
 from app.services.llm_service import llm_service
 
-logger = logging.getLogger("vivabot.services.ai")
+logger = logging.getLogger("autoviva.services.ai")
 
 class AIService:
     """

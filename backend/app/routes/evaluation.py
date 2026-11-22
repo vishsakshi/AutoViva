@@ -119,6 +119,65 @@ async def get_evaluation_sessions():
             session["viva_title"] = session["viva_id"] or "Viva unavailable"
     return sessions
 
+def _enrich_published_sessions(sessions):
+    from app.services.auth_service import auth_service
+    from app.services.viva_creation_service import viva_creation_service
+
+    users_col = auth_service.get_users_col()
+    for session in sessions:
+        session["student_name"] = None
+        if session["student_id"] and users_col is not None:
+            try:
+                student = users_col.find_one(
+                    {"user_id": session["student_id"]},
+                    {"name": 1, "email": 1, "_id": 0},
+                )
+                if student:
+                    email = str(student.get("email") or "")
+                    local_part = email.split("@", 1)[0]
+                    email_parts = local_part.split(".")
+                    if len(email_parts) >= 2:
+                        def clean_name(part):
+                            return "".join(ch for ch in part if not ch.isdigit()).replace("_", "").replace("-", "").strip()
+                        first = clean_name(email_parts[0]).capitalize()
+                        second = clean_name(email_parts[1]).capitalize()
+                        session["student_name"] = f"{first} {second}".strip() if second else first
+                    else:
+                        session["student_name"] = student.get("name")
+            except Exception:
+                logger.exception("Could not load published student name.")
+
+        viva = viva_creation_service.get_viva(session["viva_id"]) if session["viva_id"] else None
+        if viva:
+            session["course_code"] = viva.course_code
+            session["viva_title"] = " · ".join(
+                value for value in (viva.subject, viva.course_code) if value
+            ) or viva.viva_id
+        else:
+            session["viva_title"] = session["viva_id"] or "Viva unavailable"
+    return sessions
+
+@router.get("/published-sessions", response_model=List[EvaluationSessionGroup])
+async def get_published_evaluation_sessions():
+    """GET only fully approved/overridden viva attempts that faculty published."""
+    return _enrich_published_sessions(evaluation_review_service.get_published_sessions())
+
+@router.get("/published-sessions/by-student/{student_id}", response_model=List[EvaluationSessionGroup])
+async def get_published_evaluation_sessions_by_student(student_id: str):
+    """GET a student's published viva marks."""
+    return _enrich_published_sessions(
+        evaluation_review_service.get_published_sessions_by_student(student_id)
+    )
+
+@router.post("/sessions/{session_id}/publish", response_model=List[EvaluationSessionGroup])
+async def publish_evaluation_session(session_id: str):
+    """Publish every approved/overridden question result for one student viva attempt."""
+    try:
+        sessions = evaluation_review_service.publish_session(session_id)
+        return _enrich_published_sessions(sessions)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
 @router.get("/by-student/{student_id}", response_model=List[FullEvaluationRecord])
 async def get_evaluations_by_student(student_id: str):
     """GET all evaluations for a specific student."""

@@ -13,7 +13,7 @@ from app.models.evaluation_module import (
 from app.services.embedding_service import embedding_service
 from app.services.llm_service import llm_service
 
-logger = logging.getLogger("vivabot.services.evaluation_engine")
+logger = logging.getLogger("autoviva.services.evaluation_engine")
 
 class EvaluationEngineModule1:
     """

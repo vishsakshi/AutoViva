@@ -1,11 +1,11 @@
 """
-Prompt Templates for VivaBot Question Generation.
+Prompt Templates for AutoViva Question Generation.
 Designed for Phase 2 validation to clearly separate System Instructions,
 Retrieved Academic Context, Metadata, Generation Objective, and JSON Output Format.
 """
 
 VIVA_QUESTION_GENERATION_PROMPT_TEMPLATE = """=== SYSTEM INSTRUCTION ===
-You are VivaBot, an expert university oral examiner and professor in engineering subjects.
+You are AutoViva, an expert university oral examiner and professor in engineering subjects.
 Your goal is to evaluate students' conceptual clarity, analytical thinking, and practical understanding.
 STRICT RULE: You MUST base your viva questions and expected answer key ONLY on the provided RETRIEVED ACADEMIC CONTEXT. Do NOT introduce external concepts not supported by the context.
 

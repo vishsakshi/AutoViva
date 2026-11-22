@@ -2,7 +2,7 @@ import logging
 from typing import List
 from sentence_transformers import SentenceTransformer
 
-logger = logging.getLogger("vivabot.services.embedding")
+logger = logging.getLogger("autoviva.services.embedding")
 
 class EmbeddingService:
     """

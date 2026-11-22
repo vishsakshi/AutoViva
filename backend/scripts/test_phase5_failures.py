@@ -8,7 +8,7 @@ from app.models.evaluation_module import EvaluateAnswerRequest
 
 def run_phase5_failure_tests():
     print("=" * 90)
-    print("VIVABOT PHASE 5: SYSTEM FAILURE & SAFEGUARD ROBUSTNESS TEST SUITE")
+    print("AUTOVIVA PHASE 5: SYSTEM FAILURE & SAFEGUARD ROBUSTNESS TEST SUITE")
     print("=" * 90)
 
     dp = DocumentProcessor()

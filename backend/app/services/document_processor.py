@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 import fitz  # PyMuPDF
 from pptx import Presentation
 
-logger = logging.getLogger("vivabot.services.document_processor")
+logger = logging.getLogger("autoviva.services.document_processor")
 
 class DocumentProcessor:
     """

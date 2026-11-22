@@ -1,11 +1,11 @@
 import logging
 from typing import List, Dict, Any
 
-logger = logging.getLogger("vivabot.services.context_builder")
+logger = logging.getLogger("autoviva.services.context_builder")
 
 class ContextBuilder:
     """
-    Context Construction Service for VivaBot.
+    Context Construction Service for AutoViva.
     Formats, deduplicates, and caps retrieved knowledge chunks into
     a clean, metadata-tagged context block for LLM consumption.
     """

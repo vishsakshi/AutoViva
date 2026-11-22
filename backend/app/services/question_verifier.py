@@ -6,7 +6,7 @@ import numpy as np
 from app.services.embedding_service import embedding_service
 from app.services.llm_service import llm_service
 
-logger = logging.getLogger("vivabot.services.question_verifier")
+logger = logging.getLogger("autoviva.services.question_verifier")
 
 class QuestionVerifier:
     """

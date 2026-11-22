@@ -6,7 +6,7 @@ from app.models.question_gen import RubricCriterion
 
 def run_student_viva_tests():
     print("=" * 90)
-    print("VIVABOT STUDENT VIVA MODULE TEST SUITE")
+    print("AUTOVIVA STUDENT VIVA MODULE TEST SUITE")
     print("=" * 90)
 
     # 1. Test Speech-to-Text Transcription Service

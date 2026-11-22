@@ -9,7 +9,7 @@ async def test_health_check():
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
-        assert data["service"] == "VivaBot Backend"
+        assert data["service"] == "AutoViva Backend"
 
 @pytest.mark.asyncio
 async def test_route_groups():

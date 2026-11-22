@@ -10,7 +10,7 @@ from app.services.embedding_service import embedding_service
 from app.services.vector_store import vector_store
 from app.services.topic_mapper import topic_mapper
 
-logger = logging.getLogger("vivabot.services.knowledge")
+logger = logging.getLogger("autoviva.services.knowledge")
 
 class KnowledgeService:
     """

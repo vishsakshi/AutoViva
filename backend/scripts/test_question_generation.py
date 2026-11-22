@@ -21,7 +21,7 @@ def create_dbms_pdf(filepath: str):
 
 def main():
     print("=" * 80)
-    print("VIVABOT QUESTION GENERATION ENGINE SAFEGUARDS TEST SUITE")
+    print("AUTOVIVA QUESTION GENERATION ENGINE SAFEGUARDS TEST SUITE")
     print("=" * 80)
 
     dbms_pdf = "dbms_notes.pdf"

@@ -2,7 +2,7 @@ import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.core.config import settings
 
-logger = logging.getLogger("vivabot.db")
+logger = logging.getLogger("autoviva.db")
 
 class Database:
     client: AsyncIOMotorClient = None

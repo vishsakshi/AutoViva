@@ -9,6 +9,7 @@ class EvaluationStatus(str, Enum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
     OVERRIDDEN = "OVERRIDDEN"
+    PUBLISHED = "PUBLISHED"
 
 class FacultyAction(str, Enum):
     APPROVE = "APPROVE"
@@ -48,6 +49,8 @@ class FullEvaluationRecord(BaseModel):
     ai_version_v1: FeedbackModule3Response
     faculty_version_v2: Optional[FeedbackModule3Response] = None
     audit_history: List[FacultyAuditLogEntry] = []
+    published_at: Optional[str] = None
+    published_by: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class EvaluationSessionGroup(BaseModel):

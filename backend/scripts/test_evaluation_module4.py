@@ -6,7 +6,7 @@ from app.services.evaluation_review_service import evaluation_review_service
 
 def run_module4_unit_tests():
     print("=" * 80)
-    print("VIVABOT PHASE 4 - MODULE 4: FACULTY REVIEW & PIPELINE INTEGRATION TEST SUITE")
+    print("AUTOVIVA PHASE 4 - MODULE 4: FACULTY REVIEW & PIPELINE INTEGRATION TEST SUITE")
     print("=" * 80)
 
     q_text = "Describe how Network Address Translation (NAT) and NAPT allow multiple internal private IP devices to communicate over a single public IP address."

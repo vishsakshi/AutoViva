@@ -19,7 +19,7 @@ from app.services.topic_mapper import topic_mapper
 from app.services.question_verifier import question_verifier
 from app.services.llm_service import llm_service
 
-logger = logging.getLogger("vivabot.services.question_generator")
+logger = logging.getLogger("autoviva.services.question_generator")
 
 class QuestionGeneratorEngine:
     """

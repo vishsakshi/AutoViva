@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Tuple
 from app.models.evaluation_module import CriterionEvaluationOutput, EvaluatorClassification
 from app.models.scoring_module import CriterionScoringResult, ScoringModule2Response
 
-logger = logging.getLogger("vivabot.services.scoring_engine")
+logger = logging.getLogger("autoviva.services.scoring_engine")
 
 class DeterministicScoringEngineModule2:
     """

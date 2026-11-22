@@ -4,14 +4,14 @@ from typing import List, Dict, Any, Optional
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 
-logger = logging.getLogger("vivabot.services.vector_store")
+logger = logging.getLogger("autoviva.services.vector_store")
 
 class VectorStore:
     """
     ChromaDB Vector Database manager with strict document and viva isolation.
     Ensures that question generation only ever retrieves chunks from the specific uploaded document.
     """
-    def __init__(self, persist_directory: Optional[str] = None, collection_name: str = "vivabot_knowledge"):
+    def __init__(self, persist_directory: Optional[str] = None, collection_name: str = "autoviva_knowledge"):
         from app.core.config import settings
         self.persist_directory = persist_directory or getattr(settings, "CHROMA_PERSIST_DIR", "data/vector_store")
         self.collection_name = collection_name

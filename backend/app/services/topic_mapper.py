@@ -2,7 +2,7 @@ import re
 import logging
 from typing import List, Dict, Any, Optional
 
-logger = logging.getLogger("vivabot.services.topic_mapper")
+logger = logging.getLogger("autoviva.services.topic_mapper")
 
 class DocumentTopicMapper:
     """

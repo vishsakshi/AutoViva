@@ -3,12 +3,12 @@ version: '3.8'
 services:
   mongodb:
     image: mongo:6.0
-    container_name: vivabot_mongodb
+    container_name: autoviva_mongodb
     restart: always
     ports:
       - "27017:27017"
     environment:
-      - MONGO_INITDB_DATABASE=vivabot_db
+      - MONGO_INITDB_DATABASE=autoviva_db
     volumes:
       - mongo_data:/data/db
 
@@ -16,14 +16,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: vivabot_backend
+    container_name: autoviva_backend
     restart: always
     ports:
       - "8000:8000"
     environment:
       - MONGO_URI=mongodb://mongodb:27017
-      - DB_NAME=vivabot_db
-      - JWT_SECRET=vivabot_super_secret_jwt_key_replace_in_prod_12345
+      - DB_NAME=autoviva_db
+      - JWT_SECRET=autoviva_super_secret_jwt_key_replace_in_prod_12345
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=1440
       - LLM_API_URL=https://api.openai.com/v1
@@ -35,7 +35,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: vivabot_frontend
+    container_name: autoviva_frontend
     restart: always
     ports:
       - "5173:5173"

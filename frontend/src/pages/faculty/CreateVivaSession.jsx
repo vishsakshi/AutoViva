@@ -14,10 +14,10 @@ export default function CreateVivaSession() {
 
   // STEP 1: Viva Metadata (Preserved across Step 1 <-> 2 <-> 3 <-> 4)
   const [subject, setSubject] = useState('');
-  const [courseCode, setCourseCode] = useState('CS301');
-  const [topic, setTopic] = useState('IP Addressing, NAT & NAPT');
-  const [questionCount, setQuestionCount] = useState(3);
-  const [durationMinutes, setDurationMinutes] = useState(15);
+  const [courseCode, setCourseCode] = useState('');
+  const [topic, setTopic] = useState('');
+  const [questionCount, setQuestionCount] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState('');
   const [batch, setBatch] = useState('');
 
   // Viva Record & Uploaded File Metadata List

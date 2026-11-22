@@ -2,11 +2,11 @@ import re
 import logging
 from typing import List, Dict, Any
 
-logger = logging.getLogger("vivabot.services.concept_extractor")
+logger = logging.getLogger("autoviva.services.concept_extractor")
 
 class ConceptExtractor:
     """
-    Concept Extraction & Question Planning Engine for RAG VivaBot:
+    Concept Extraction & Question Planning Engine for RAG AutoViva:
     Step 4: Extracts academic concepts, definitions, processes, and source metadata from retrieved chunks.
     Step 5: Constructs a Question Plan before LLM synthesis.
     """

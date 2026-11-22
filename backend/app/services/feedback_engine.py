@@ -9,7 +9,7 @@ from app.models.feedback_module import (
     EvidenceValidationItem
 )
 
-logger = logging.getLogger("vivabot.services.feedback_engine")
+logger = logging.getLogger("autoviva.services.feedback_engine")
 
 class EvidenceValidationEngine:
     """

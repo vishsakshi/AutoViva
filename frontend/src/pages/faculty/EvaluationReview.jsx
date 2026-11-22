@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FileCheck, ArrowLeft, CheckCircle2, Edit3, AlertTriangle, Layers, CalendarClock, ShieldCheck } from 'lucide-react';
+import { FileCheck, ArrowLeft, CheckCircle2, Edit3, AlertTriangle, Layers, CalendarClock, ShieldCheck, Award, Send } from 'lucide-react';
 import { getApiUrl } from '../../services/api';
 
 const getActiveVersion = (record) => record?.faculty_version_v2 || record?.ai_version_v1;
@@ -9,6 +9,7 @@ const getMaxScore = (record) => getActiveVersion(record)?.evaluation_summary?.ma
 
 export default function EvaluationReview() {
   const [sessions, setSessions] = useState([]);
+  const [publishedSessions, setPublishedSessions] = useState([]);
   const [selectedSessionId, setSelectedSessionId] = useState('');
   const [selectedEval, setSelectedEval] = useState(null);
   const [criterionScores, setCriterionScores] = useState({});
@@ -51,8 +52,20 @@ export default function EvaluationReview() {
     }
   }, [selectedEval?.evaluation_id, selectedSessionId, selectRecord]);
 
+  const fetchPublishedSessions = useCallback(async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/evaluation/published-sessions'));
+      if (!res.ok) throw new Error(`Could not load published results (${res.status}).`);
+      const data = await res.json();
+      setPublishedSessions(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setQueueError((current) => current || error.message || 'Could not load published results.');
+    }
+  }, []);
+
   useEffect(() => {
     fetchSessions('', '');
+    fetchPublishedSessions();
   }, []);
 
   const selectedSession = sessions.find((session) => session.session_id === selectedSessionId) || null;
@@ -83,6 +96,7 @@ export default function EvaluationReview() {
       }
       setMessage({ type: 'success', text: `Question evaluation approved.` });
       await fetchSessions(selectedSessionId, record.evaluation_id);
+      await fetchPublishedSessions();
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Error approving evaluation.' });
     } finally {
@@ -114,6 +128,7 @@ export default function EvaluationReview() {
       }
       setMessage({ type: 'success', text: `Faculty override saved.` });
       await fetchSessions(selectedSessionId, selectedEval.evaluation_id);
+      await fetchPublishedSessions();
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Error overriding marks.' });
     } finally {
@@ -125,6 +140,35 @@ export default function EvaluationReview() {
     if (!value) return 'Date unavailable';
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  };
+
+  const handlePublishSession = async () => {
+    if (!selectedSession) return;
+    const allReviewed = selectedSession.evaluations.every(
+      (record) => record.status === 'APPROVED' || record.status === 'OVERRIDDEN'
+    );
+    if (!allReviewed) {
+      setMessage({ type: 'error', text: 'Approve or override every question before publishing the viva result.' });
+      return;
+    }
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch(getApiUrl(`/api/evaluation/sessions/${encodeURIComponent(selectedSession.session_id)}/publish`), {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.detail || `Could not publish viva result (${res.status}).`);
+      }
+      setMessage({ type: 'success', text: 'Viva result approved and published to the student portal.' });
+      await fetchSessions(selectedSessionId, selectedEval?.evaluation_id);
+      await fetchPublishedSessions();
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Could not publish viva result.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openReviewControls = (record) => {
@@ -231,6 +275,20 @@ export default function EvaluationReview() {
                     <span className="block text-[10px] text-slate-500 mt-1">{selectedSession.question_count} questions · {selectedSession.status.replaceAll('_', ' ')}</span>
                   </div>
                 </div>
+                {selectedSession.status !== 'PUBLISHED' && (
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handlePublishSession}
+                      disabled={loading || !selectedSession.evaluations.every(
+                        (record) => record.status === 'APPROVED' || record.status === 'OVERRIDDEN'
+                      )}
+                      className="px-4 py-2.5 bg-[#0F766E] hover:bg-[#0D645D] text-white font-bold text-xs rounded-xl flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Send className="w-4 h-4" /> Approve & Publish Viva Result
+                    </button>
+                  </div>
+                )}
                 {selectedSession.legacy && (
                   <p className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800">
                     This evaluation predates attempt IDs. It is shown separately because its original session cannot be recovered safely.
@@ -404,6 +462,70 @@ export default function EvaluationReview() {
           )}
         </section>
       </div>
+
+      <section className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <Award className="w-5 h-5 text-[#0F766E]" />
+              Published Student Marks ({publishedSessions.length})
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Approved viva results visible to students.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={fetchPublishedSessions}
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {publishedSessions.length === 0 ? (
+          <div className="p-6 bg-[#F8FAFC] border border-slate-200/80 rounded-2xl text-center text-xs text-slate-500 italic">
+            No viva results have been published yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {publishedSessions.map((session) => {
+              const percentage = session.max_marks > 0
+                ? ((session.total_marks / session.max_marks) * 100).toFixed(1)
+                : '0.0';
+              return (
+                <article key={session.session_id} className="p-5 bg-[#F8FAFC] border border-emerald-200 rounded-2xl space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        {session.student_name || 'Student name unavailable'}
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        {session.viva_title}
+                      </p>
+                    </div>
+                    <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold">
+                      PUBLISHED
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between border-t border-slate-200 pt-3">
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase font-bold">Final Marks</p>
+                      <p className="text-xl font-black text-emerald-700 font-mono">
+                        {session.total_marks} / {session.max_marks}
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">{percentage}%</p>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    {formatDate(session.started_at)} · {session.question_count} question{session.question_count === 1 ? '' : 's'}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

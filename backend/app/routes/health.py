@@ -16,6 +16,6 @@ async def health_check():
 
     return {
         "status": "ok",
-        "service": "VivaBot Backend",
+        "service": "AutoViva Backend",
         "database": db_status
     }

@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     
     # MongoDB
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-    DB_NAME: str = os.getenv("DB_NAME", "vivabot_db")
+    DB_NAME: str = os.getenv("DB_NAME", "autoviva_db")
     
     # Security & Auth
     JWT_SECRET: str = os.getenv("JWT_SECRET", "supersecretjwtkey_change_me")

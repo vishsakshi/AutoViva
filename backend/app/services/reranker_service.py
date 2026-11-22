@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, Any
 from sentence_transformers import CrossEncoder
 
-logger = logging.getLogger("vivabot.services.reranker")
+logger = logging.getLogger("autoviva.services.reranker")
 
 class RerankerService:
     """

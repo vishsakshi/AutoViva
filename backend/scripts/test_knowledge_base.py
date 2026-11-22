@@ -60,7 +60,7 @@ def generate_sample_pdf(filepath: str):
 
 def main():
     print("=" * 70)
-    print("VivaBot Phase 1 Knowledge Base Test Script")
+    print("AutoViva Phase 1 Knowledge Base Test Script")
     print("=" * 70)
 
     sample_pdf_path = "sample_data_structures_notes.pdf"
