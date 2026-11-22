@@ -656,31 +656,35 @@ class LLMService:
         ideal_answer: str,
         rubric: List[Dict[str, Any]],
         student_answer: str,
-        evidence_context: str = ""
+        evidence_context: str = "",
+        max_marks: float = 10.0
     ) -> Dict[str, Any]:
-        """Evaluates student oral transcript against approved rubric criteria and evidence."""
-        rubric_str = "\n".join([f"- Criterion {idx+1} [{c.get('marks', 3.0)} Marks]: {c.get('criterion', '')}" for idx, c in enumerate(rubric)])
+        """Evaluates student oral transcript directly and awards a score out of max_marks."""
+        rubric_str = "\n".join([f"- {c.get('criterion', '')}" for c in rubric])
 
         system_instruction = (
-            "You are AutoViva's Explainable Oral Viva Answer Evaluator.\n"
-            "Evaluate student oral answer against RUBRIC CRITERIA and BENCHMARK EVIDENCE.\n"
-            "Focus on conceptual understanding. Output valid JSON.\n"
-            "CRITICAL RELEVANCE RULE: If the student answer is completely off-topic, irrelevant, or does not address the question/rubric (e.g. discussing sports, hobbies, or unrelated subjects), classify every criterion as 'NOT_MENTIONED' with evidence_quote '' and awarded_marks 0.0."
+            "You are AutoViva's viva answer evaluator.\n"
+            "Judge the student's complete conceptual answer using the viva question and benchmark ideal answer.\n"
+            "Award marks directly out of the supplied maximum. Do not distribute marks by the old rubric percentages.\n"
+            "Use the rubric only as supporting context. Focus on correctness, relevance, completeness, and explanation quality.\n"
+            "If the answer is completely irrelevant, award 0 marks.\n"
+            "Output valid JSON only."
         )
 
         user_prompt = (
             f"=== VIVA QUESTION ===\n{question_text}\n\n"
             f"=== BENCHMARK IDEAL ANSWER ===\n{ideal_answer}\n\n"
-            f"=== RUBRIC CRITERIA ===\n{rubric_str}\n\n"
+            f"=== TOTAL MARKS FOR THIS QUESTION ===\n{max_marks}\n\n"
+            f"=== OPTIONAL RUBRIC CONTEXT (NOT A MARK-SPLIT REQUIREMENT) ===\n{rubric_str or 'No rubric context'}\n\n"
             f"=== STUDENT ANSWER ===\n\"{student_answer}\"\n\n"
             "=== REQUIRED JSON SCHEMA ===\n"
             "{\n"
             '  "criterion_evaluations": [\n'
             '    {\n'
             '      "criterion_id": "c1",\n'
-            '      "criterion_text": "...",\n'
-            '      "allocated_marks": 3.0,\n'
-            '      "awarded_marks": 3.0,\n'
+            '      "criterion_text": "Overall answer evaluation",\n'
+            f'      "allocated_marks": {max_marks},\n'
+            f'      "awarded_marks": 0.0,\n'
             '      "classification": "SUPPORTED|PARTIALLY_SUPPORTED|NOT_MENTIONED|CONTRADICTED",\n'
             '      "confidence": 0.95,\n'
             '      "evidence_quote": "exact verbatim substring from student answer",\n'
@@ -711,57 +715,49 @@ class LLMService:
                 "raw_response": raw_resp
             }
 
-        return self._deterministic_evaluation_fallback(question_text, ideal_answer, rubric, student_answer)
+        return self._deterministic_evaluation_fallback(
+            question_text, ideal_answer, rubric, student_answer, max_marks
+        )
 
     def _deterministic_evaluation_fallback(
         self,
         question_text: str,
         ideal_answer: str,
         rubric: List[Dict[str, Any]],
-        student_answer: str
+        student_answer: str,
+        max_marks: float = 10.0
     ) -> Dict[str, Any]:
         """Deterministic evaluation fallback."""
         student_lower = student_answer.lower().strip()
-        crit_outputs = []
-
-        for idx, r in enumerate(rubric):
-            c_id = f"c{idx+1}"
-            c_text = r.get("criterion", "")
-            alloc = float(r.get("marks", 3.0))
-
-            c_words = [w for w in c_text.lower().split() if len(w) > 3]
-            hits = sum(1 for w in c_words if w in student_lower)
-            ratio = hits / max(1, len(c_words))
-
-            if ratio >= 0.40:
+        answer_words = [word for word in ideal_answer.lower().split() if len(word) > 4]
+        unique_words = list(dict.fromkeys(answer_words))
+        if not student_lower or not unique_words:
+            awarded = 0.0
+            classification = "NOT_MENTIONED"
+            ratio = 0.0
+            evidence = ""
+        else:
+            hits = sum(1 for word in unique_words if word in student_lower)
+            ratio = hits / max(1, len(unique_words))
+            awarded = round(max_marks * min(1.0, ratio), 2)
+            evidence = student_answer[:120]
+            if ratio >= 0.70:
                 classification = "SUPPORTED"
-                awarded = alloc
-                conf = 0.92
-                evidence = student_answer[:120]
-                reasoning = f"Student answer demonstrates sound understanding of criterion: '{c_text}'."
-            elif ratio >= 0.15:
+            elif ratio >= 0.25:
                 classification = "PARTIALLY_SUPPORTED"
-                awarded = round(alloc * 0.5, 1)
-                conf = 0.80
-                evidence = student_answer[:100]
-                reasoning = f"Student answer partially mentions key terms of criterion: '{c_text}'."
             else:
                 classification = "NOT_MENTIONED"
-                awarded = 0.0
-                conf = 0.90
-                evidence = ""
-                reasoning = f"Student answer omits mention of criterion: '{c_text}'."
 
-            crit_outputs.append({
-                "criterion_id": c_id,
-                "criterion_text": c_text,
-                "allocated_marks": alloc,
-                "awarded_marks": awarded,
-                "classification": classification,
-                "confidence": conf,
-                "evidence_quote": evidence,
-                "reasoning": reasoning
-            })
+        crit_outputs = [{
+            "criterion_id": "c1",
+            "criterion_text": "Overall answer evaluation",
+            "allocated_marks": max_marks,
+            "awarded_marks": awarded,
+            "classification": classification,
+            "confidence": 0.70,
+            "evidence_quote": evidence,
+            "reasoning": f"Offline fallback semantic overlap score: {ratio:.2f}."
+        }]
 
         return {
             "source": "DETERMINISTIC_SEMANTIC",

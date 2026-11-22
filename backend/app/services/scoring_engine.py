@@ -64,15 +64,28 @@ class DeterministicScoringEngineModule2:
         pending_review = False
 
         for eval_item in criterion_evaluations:
-            multiplier, final_class = self.compute_multiplier(
-                classification=eval_item.classification,
-                confidence=eval_item.confidence
-            )
+            if eval_item.awarded_marks is not None:
+                if eval_item.confidence < self.low_confidence_threshold:
+                    earned = 0.0
+                    final_class = EvaluatorClassification.REVIEW_REQUIRED
+                    multiplier = 0.0
+                else:
+                    earned = round(
+                        min(float(eval_item.allocated_marks), max(0.0, float(eval_item.awarded_marks))),
+                        2
+                    )
+                    final_class = eval_item.classification
+                    multiplier = earned / eval_item.allocated_marks if eval_item.allocated_marks > 0 else 0.0
+            else:
+                multiplier, final_class = self.compute_multiplier(
+                    classification=eval_item.classification,
+                    confidence=eval_item.confidence
+                )
+                earned = round(eval_item.allocated_marks * multiplier, 2)
 
             if final_class == EvaluatorClassification.REVIEW_REQUIRED:
                 pending_review = True
 
-            earned = round(eval_item.allocated_marks * multiplier, 2)
             total_earned += earned
             max_possible += eval_item.allocated_marks
 

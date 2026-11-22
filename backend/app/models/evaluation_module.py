@@ -16,6 +16,7 @@ class EvaluateAnswerRequest(BaseModel):
     ideal_answer: str = Field(..., description="Reference ideal answer for context")
     evaluation_rubric: List[RubricCriterion] = Field(..., description="List of rubric criteria with allocated marks")
     student_answer: str = Field(..., description="Student's submitted oral/written answer")
+    allocated_marks: Optional[float] = Field(default=10.0, gt=0)
     subject: Optional[str] = "Computer Networks"
     topic: Optional[str] = "IP Addressing & NAT"
     # Passed by the student frontend so evaluations are keyed to the right question/student
@@ -30,6 +31,7 @@ class CriterionEvaluationOutput(BaseModel):
     criterion_id: str
     criterion_text: str
     allocated_marks: float
+    awarded_marks: Optional[float] = Field(default=None, ge=0)
     classification: EvaluatorClassification
     confidence: float = Field(..., ge=0.0, le=1.0, description="Evaluator confidence score between 0.0 and 1.0")
     evidence_quote: str = Field(default="", description="Verbatim quote from student answer supporting classification")

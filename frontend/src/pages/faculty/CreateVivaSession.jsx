@@ -17,6 +17,7 @@ export default function CreateVivaSession() {
   const [courseCode, setCourseCode] = useState('');
   const [topic, setTopic] = useState('');
   const [questionCount, setQuestionCount] = useState('');
+  const [totalMarks, setTotalMarks] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
   const [batch, setBatch] = useState('');
 
@@ -54,6 +55,7 @@ export default function CreateVivaSession() {
           course_code: courseCode,
           topic,
           question_count: parseInt(questionCount, 10),
+          total_marks: parseFloat(totalMarks),
           duration_minutes: parseInt(durationMinutes, 10),
           batch
         })
@@ -404,16 +406,31 @@ export default function CreateVivaSession() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Question Count</label>
                 <input
                   type="number"
                   min="1"
-                  max="10"
+                  max="50"
                   required
                   value={questionCount}
                   onChange={(e) => setQuestionCount(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:border-[#0F766E] focus:outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Total Marks</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  step="0.01"
+                  required
+                  value={totalMarks}
+                  onChange={(e) => setTotalMarks(e.target.value)}
+                  placeholder="e.g. 30"
                   className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:border-[#0F766E] focus:outline-none transition-all"
                 />
               </div>

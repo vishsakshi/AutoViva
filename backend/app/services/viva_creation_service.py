@@ -19,7 +19,8 @@ class VivaCreateRequest(BaseModel):
     course_code: str = Field(..., description="Course Code (e.g. CS301)")
     topic: str = Field(..., description="Topic / Unit Name")
     difficulty: str = Field(default="balanced")
-    question_count: int = Field(default=3, ge=1, le=10)
+    question_count: int = Field(default=3, ge=1, le=50)
+    total_marks: float = Field(default=10.0, gt=0, le=1000)
     duration_minutes: int = Field(default=15, ge=5, le=60)
     batch: str = Field(default="Batch 2026", description="Student Batch")
 
@@ -30,6 +31,8 @@ class VivaSessionRecord(BaseModel):
     topic: str
     difficulty: str = "balanced"
     question_count: int
+    total_marks: float = 10.0
+    marks_per_question: float = 10.0
     duration_minutes: int
     batch: str
     document_id: Optional[str] = None
@@ -73,6 +76,8 @@ class VivaCreationService:
     def create_viva(self, req: VivaCreateRequest) -> VivaSessionRecord:
         v_id = f"viva_{uuid.uuid4().hex[:8]}"
         now = time.strftime("%Y-%m-%d %H:%M:%S")
+        total_marks = round(float(req.total_marks), 2)
+        marks_per_question = round(total_marks / req.question_count, 2)
 
         record = VivaSessionRecord(
             viva_id=v_id,
@@ -81,6 +86,8 @@ class VivaCreationService:
             topic=req.topic.strip(),
             difficulty=req.difficulty,
             question_count=req.question_count,
+            total_marks=total_marks,
+            marks_per_question=marks_per_question,
             duration_minutes=req.duration_minutes,
             batch=req.batch.strip(),
             created_at=now
@@ -141,6 +148,27 @@ class VivaCreationService:
         q_list = results.get("generated_questions", [])
         if not q_list:
             raise ValueError("No questions could be generated because no academic context was retrieved from the uploaded syllabus.")
+        if len(q_list) < record.question_count:
+            raise ValueError(
+                f"Unable to generate exactly {record.question_count} questions; "
+                f"only {len(q_list)} passed verification. Please check the uploaded syllabus and try again."
+            )
+        if len(q_list) > record.question_count:
+            logger.warning(
+                "[QUESTION COUNT MISMATCH] Generator returned %d questions for a request of %d; "
+                "discarding the surplus.",
+                len(q_list),
+                record.question_count,
+            )
+            q_list = q_list[:record.question_count]
+
+        total_cents = int(round(record.total_marks * 100))
+        base_cents, remainder = divmod(total_cents, len(q_list))
+        for index, question in enumerate(q_list):
+            question_marks = (base_cents + (1 if index < remainder else 0)) / 100
+            question["total_marks"] = round(question_marks, 2)
+            question["marks"] = round(question_marks, 2)
+            question["allocated_marks"] = round(question_marks, 2)
 
         record.generated_questions = q_list
         record.topic_map = results.get("topic_map", record.topic_map)

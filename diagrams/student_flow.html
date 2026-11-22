@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Module Flow - VivaBot</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 Student Module Flow - Question to Submission</h1>
+        <div class="mermaid">
+graph TD
+    SStart["Student Login"] --> Dashboard["Student Dashboard<br/>View Available Vivas<br/>Select Viva to Attempt"]
+    
+    Dashboard --> PermCheck["Permission Check<br/>Request Camera Permission<br/>Request Microphone Permission"]
+    
+    PermCheck --> PermGrant{Permissions<br/>Granted?}
+    PermGrant -->|No| PermError["Show Error<br/>Guide to enable in browser"]
+    PermError --> PermCheck
+    PermGrant -->|Yes| LoadQ["Load Questions<br/>Fetch from backend<br/>GET /api/viva/active-questions"]
+    
+    LoadQ --> RestoreProgress["Check Progress<br/>Load from localStorage<br/>Resume from saved index"]
+    
+    RestoreProgress --> ShowQ["Display Question<br/>- Subject & Topic<br/>- Question Text<br/>- AI Examiner Avatar<br/>- Student Camera Feed<br/>- Facial Analysis"]
+    
+    ShowQ --> TTS["Auto-speak Question<br/>Text-to-Speech<br/>Read question aloud"]
+    
+    TTS --> Listen["LISTENING State<br/>Student hears question<br/>Can click 'Repeat Question'<br/>Ready to record answer"]
+    
+    Listen --> RecordStart["Student Clicks 'Start Recording'"]
+    
+    RecordStart --> Recording["RECORDING State<br/>- MediaRecorder captures audio<br/>- Web Speech API live transcription<br/>- Transcript appears in real-time<br/>- 120 second timer active<br/>- Microphone level visualizer<br/>- Facial expression tracking"]
+    
+    Recording --> RecordControl{Student<br/>Action}
+    
+    RecordControl -->|Pause| Paused["PAUSED State<br/>Student paused recording<br/>Can Resume or Stop"]
+    
+    RecordControl -->|Resume| Recording
+    
+    RecordControl -->|Stop| StopRec["Stop Recording<br/>- Stop MediaRecorder<br/>- Stop Web Speech API<br/>- Transition to PROCESSING"]
+    
+    RecordControl -->|Timer Hits 0| StopRec
+    
+    StopRec --> Processing["PROCESSING State<br/>- Collect audio chunks<br/>- POST to /api/viva/transcribe<br/>- OpenAI Whisper STT<br/>- Get backend transcript"]
+    
+    Processing --> UpdateTranscript["Update Transcript Display<br/>- Show final transcript text<br/>- Show word count<br/>- Ready for submission"]
+    
+    UpdateTranscript --> ReadyState["TRANSCRIPT_READY State<br/>- Display final answer<br/>- Show Submit Answer button<br/>- Show Re-record button"]
+    
+    ReadyState --> StudentChoice{Student<br/>Choice}
+    
+    StudentChoice -->|Re-record| ReRecord["Handle Re-record<br/>Clear transcript<br/>Back to LISTENING<br/>Can record again"]
+    
+    ReRecord --> Listen
+    
+    StudentChoice -->|Submit Answer| Submit["Student Clicks 'Submit Answer'"]
+    
+    Submit --> Submitting["SUBMITTING State<br/>- Validate transcript not empty<br/>- Prepare evaluation payload<br/>- POST to /api/evaluation/submit"]
+    
+    Submitting --> EvalPipeline["Evaluation Pipeline<br/>Module 1: LLM Classification<br/>Module 2: Scoring 1-10<br/>Module 3: Feedback Generation<br/>Status: PENDING_REVIEW"]
+    
+    EvalPipeline --> EvalSuccess{Evaluation<br/>Success?}
+    
+    EvalSuccess -->|No| EvalError["SUBMIT_ERROR State<br/>Show error message<br/>Can retry submission"]
+    
+    EvalError --> ReadyState
+    
+    EvalSuccess -->|Yes| CheckLast{Last<br/>Question?}
+    
+    CheckLast -->|No| NextLoading["NEXT_LOADING State<br/>900ms transition<br/>Load next question index"]
+    
+    NextLoading --> ShowQ
+    
+    CheckLast -->|Yes| Complete["VIVA_COMPLETE<br/>Show Completion Screen<br/>- Total questions<br/>- Questions attempted<br/>- Completion time<br/>- Summary stats"]
+    
+    Complete --> SaveCompletion["Save Completion<br/>- Mark in localStorage<br/>- Save to dashboard<br/>- Redirect to dashboard"]
+    
+    SaveCompletion --> End["Return to Dashboard"]
+    
+    style SStart fill:#e3f2fd
+    style PermCheck fill:#fff3e0
+    style LoadQ fill:#fff3e0
+    style ShowQ fill:#f3e5f5
+    style TTS fill:#f3e5f5
+    style Recording fill:#ffebee
+    style Processing fill:#fff9c4
+    style ReadyState fill:#e8f5e9
+    style Submitting fill:#fce4ec
+    style EvalPipeline fill:#f3e5f5
+    style Complete fill:#c8e6c9
+    style EvalError fill:#ffcdd2
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+        mermaid.contentLoaded();
+    </script>
+</body>
+</html>

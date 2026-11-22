@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faculty Module Flow - VivaBot</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👨‍🏫 Faculty Module Flow - Viva Creation to Evaluation</h1>
+        <div class="mermaid">
+graph TD
+    FStart["Faculty Login"] --> Dashboard["Faculty Dashboard"]
+    
+    Dashboard -->|Create Viva| Step1["Step 1: Viva Metadata<br/>Subject, Course Code, Topic<br/>Question Count, Duration"]
+    
+    Step1 --> Step1Val{Valid Input?}
+    Step1Val -->|No| Step1
+    Step1Val -->|Yes| Step2["Step 2: Upload Syllabus<br/>Select PDF file<br/>Optional: Multiple files"]
+    
+    Step2 --> UploadProc["Upload Processing<br/>Extract text from PDF<br/>Split into chunks"]
+    
+    UploadProc --> RAGIndex["RAG Indexing<br/>Generate embeddings<br/>Store in Vector DB<br/>Create syllabus context"]
+    
+    RAGIndex --> Step3["Step 3: Generate Questions<br/>Select question count<br/>Review auto-generated questions"]
+    
+    Step3 --> QGenFlow["Question Generation Flow<br/>1. Load syllabus context<br/>2. Call Qwen LLM<br/>3. Apply A-L verification gates<br/>4. Format questions with rubrics"]
+    
+    QGenFlow --> QReview{Questions<br/>Acceptable?}
+    QReview -->|No| Step3
+    QReview -->|Yes| Step4["Step 4: Publish Viva<br/>Approve & publish<br/>Set viva status to ACTIVE"]
+    
+    Step4 --> Publish["Viva Published<br/>Stored in database<br/>Ready for students"]
+    
+    Publish --> Faculty2["Faculty View: Pending Evaluations<br/>- List all PENDING_REVIEW evaluations<br/>- Student name, question, AI score<br/>- Student's recorded answer"]
+    
+    Faculty2 --> Review["Faculty Review Evaluation<br/>1. Read question & rubric<br/>2. View student answer<br/>3. See AI Module 1 (M1) score<br/>4. See Module 2 (M2) scoring breakdown<br/>5. See Module 3 (M3) feedback"]
+    
+    Review --> Decision{Faculty<br/>Decision}
+    
+    Decision -->|Approve| Approve["Approve Evaluation<br/>Status: APPROVED<br/>Optional comment"]
+    
+    Decision -->|Reject| Reject["Reject Evaluation<br/>Status: REJECTED<br/>Provide reason & comment"]
+    
+    Decision -->|Override| Override["Override Score<br/>Modify marks per criterion<br/>Provide reason & comment<br/>Create Version 2 Faculty"]
+    
+    Approve --> AuditLog["Audit Log Entry<br/>Record action<br/>Store original score<br/>Store comment"]
+    
+    Reject --> AuditLog
+    
+    Override --> AuditLog
+    
+    AuditLog --> Complete["Evaluation Complete<br/>Stored with full audit trail<br/>Student can view feedback"]
+    
+    Complete --> Analytics["Analytics Dashboard<br/>View pass/fail stats<br/>Subject-wise breakdown<br/>Time taken analysis<br/>Faculty insights"]
+    
+    style FStart fill:#e3f2fd
+    style Step1 fill:#fff3e0
+    style Step2 fill:#fff3e0
+    style Step3 fill:#fff3e0
+    style Step4 fill:#fff3e0
+    style QGenFlow fill:#f3e5f5
+    style RAGIndex fill:#f3e5f5
+    style Faculty2 fill:#e8f5e9
+    style Review fill:#e8f5e9
+    style Approve fill:#c8e6c9
+    style Reject fill:#ffcdd2
+    style Override fill:#ffe0b2
+    style Analytics fill:#e0f2f1
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+        mermaid.contentLoaded();
+    </script>
+</body>
+</html>

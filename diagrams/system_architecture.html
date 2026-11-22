@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Architecture - VivaBot</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏗️ System Architecture - VivaBot Project</h1>
+        <div class="mermaid">
+graph TB
+    subgraph Client["Frontend Layer"]
+        FacultyUI["Faculty Portal<br/>CreateVivaSession.jsx"]
+        StudentUI["Student Portal<br/>LiveVivaSession.jsx"]
+    end
+
+    subgraph Backend["Backend Services"]
+        AuthAPI["Auth Service<br/>auth.py"]
+        VivaAPI["Viva Service<br/>viva.py"]
+        EvalAPI["Evaluation Service<br/>evaluation.py"]
+        QuestionsAPI["Questions Service<br/>questions.py"]
+        SpeechAPI["Speech Service<br/>speech_service.py"]
+    end
+
+    subgraph Processing["Processing Pipeline"]
+        RAGPipeline["RAG Pipeline<br/>Vector Store + Retriever"]
+        QGenEngine["Question Generator<br/>Qwen LLM"]
+        EvalM1["Module 1<br/>LLM Classification"]
+        EvalM2["Module 2<br/>Scoring Engine"]
+        EvalM3["Module 3<br/>Feedback Generator"]
+    end
+
+    subgraph Storage["Data Layer"]
+        DB["PostgreSQL Database<br/>Questions, Evaluations, Users"]
+        VectorStore["Vector Store<br/>Chroma/FAISS<br/>Embeddings"]
+        FileStorage["File Storage<br/>Syllabus PDFs"]
+    end
+
+    subgraph External["External Services"]
+        OpenAI["OpenAI<br/>Whisper STT<br/>Text-to-Speech<br/>Embeddings"]
+        Qwen["Qwen Model<br/>Question Generation<br/>Answer Evaluation"]
+    end
+
+    FacultyUI -->|Create Viva| AuthAPI
+    FacultyUI -->|Upload Syllabus| VivaAPI
+    FacultyUI -->|View Evaluations| EvalAPI
+    
+    StudentUI -->|Login| AuthAPI
+    StudentUI -->|Fetch Questions| VivaAPI
+    StudentUI -->|Submit Answer| EvalAPI
+    StudentUI -->|STT Transcription| SpeechAPI
+    
+    VivaAPI -->|Generate Questions| QGenEngine
+    QGenEngine -->|Retrieve Context| RAGPipeline
+    RAGPipeline -->|Search| VectorStore
+    RAGPipeline -->|Store Embeddings| VectorStore
+    
+    VivaAPI -->|Upload & Index| FileStorage
+    FileStorage -->|Extract Text| RAGPipeline
+    
+    EvalAPI -->|Evaluate| EvalM1
+    EvalM1 -->|Score| EvalM2
+    EvalM2 -->|Generate Feedback| EvalM3
+    EvalM3 -->|Store Result| DB
+    
+    SpeechAPI -->|Transcribe Audio| OpenAI
+    QGenEngine -->|LLM Call| Qwen
+    EvalM1 -->|LLM Call| Qwen
+    EvalM3 -->|Generate Feedback| Qwen
+    
+    DB -->|Store/Retrieve| VivaAPI
+    DB -->|Store/Retrieve| EvalAPI
+    DB -->|Store/Retrieve| AuthAPI
+    
+    style Client fill:#e1f5ff
+    style Backend fill:#f3e5f5
+    style Processing fill:#fff3e0
+    style Storage fill:#e8f5e9
+    style External fill:#fce4ec
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+        mermaid.contentLoaded();
+    </script>
+</body>
+</html>

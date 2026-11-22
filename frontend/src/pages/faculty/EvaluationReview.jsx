@@ -105,10 +105,7 @@ export default function EvaluationReview() {
   };
 
   const handleOverride = async () => {
-    if (!selectedEval || !reason.trim()) {
-      setMessage({ type: 'error', text: 'An override reason is required.' });
-      return;
-    }
+    if (!selectedEval) return;
     setLoading(true);
     setMessage(null);
     try {
@@ -424,7 +421,7 @@ export default function EvaluationReview() {
                       />
                     </label>
                     <label className="text-xs font-bold text-slate-700">
-                      Override Reason (required)
+                      Override Reason
                       <input
                         type="text"
                         value={reason}
@@ -446,7 +443,7 @@ export default function EvaluationReview() {
                     )}
                     <button
                       onClick={handleOverride}
-                      disabled={loading || !reason.trim()}
+                      disabled={loading}
                       className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 disabled:opacity-50"
                     >
                       <Edit3 className="w-4 h-4" /> Apply Faculty Mark Override

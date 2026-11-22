@@ -58,53 +58,57 @@ class EvaluationEngineModule1:
             ideal_answer=req.ideal_answer,
             rubric=rubric_dicts,
             student_answer=req.student_answer,
-            evidence_context=f"Subject: {req.subject or ''}, Topic: {req.topic or ''}"
+            evidence_context=f"Subject: {req.subject or ''}, Topic: {req.topic or ''}",
+            max_marks=float(req.allocated_marks or 10.0)
         )
 
         crit_raw_list = llm_eval.get("criterion_evaluations", [])
         eval_outputs: List[CriterionEvaluationOutput] = []
+        max_marks = float(req.allocated_marks or 10.0)
+        raw_match = crit_raw_list[0] if crit_raw_list else None
 
-        for idx, item in enumerate(req.evaluation_rubric):
-            c_id = f"c{idx + 1}"
-            raw_match = next((c for c in crit_raw_list if c.get("criterion_id") == c_id or c.get("criterion_text") == item.criterion), None)
+        if raw_match:
+            cls_str = str(raw_match.get("classification", "SUPPORTED")).upper()
+            try:
+                classification = EvaluatorClassification(cls_str)
+            except ValueError:
+                classification = EvaluatorClassification.PARTIALLY_SUPPORTED
 
-            if raw_match:
-                cls_str = str(raw_match.get("classification", "SUPPORTED")).upper()
-                try:
-                    classification = EvaluatorClassification(cls_str)
-                except ValueError:
-                    classification = EvaluatorClassification.SUPPORTED if "SUPPORT" in cls_str else EvaluatorClassification.PARTIALLY_SUPPORTED
-
-                conf = float(raw_match.get("confidence", 0.90))
-                evidence = str(raw_match.get("evidence_quote", "")).strip()
-                reasoning = str(raw_match.get("reasoning", "")).strip()
-                alloc_marks = item.marks
-            else:
-                # Fallback calculation for unmapped criterion
-                classification = EvaluatorClassification.NOT_MENTIONED
-                conf = 0.85
-                evidence = ""
-                reasoning = f"Student answer omits support for criterion '{item.criterion}'."
-                alloc_marks = item.marks
+            conf = float(raw_match.get("confidence", 0.90))
+            evidence = str(raw_match.get("evidence_quote", "")).strip()
+            reasoning = str(raw_match.get("reasoning", "")).strip()
+            try:
+                awarded_marks = float(raw_match.get("awarded_marks", raw_match.get("earned_marks", 0.0)))
+            except (TypeError, ValueError):
+                awarded_marks = 0.0
+            awarded_marks = round(min(max_marks, max(0.0, awarded_marks)), 2)
+        else:
+            classification = EvaluatorClassification.NOT_MENTIONED
+            conf = 0.85
+            evidence = ""
+            reasoning = "The LLM did not return a usable overall evaluation."
+            awarded_marks = 0.0
 
             # CONFIDENCE GATE: If confidence < 0.55, flag REVIEW_REQUIRED
-            if conf < self.low_confidence_threshold:
-                logger.warning(f"Confidence {conf:.2f} < threshold {self.low_confidence_threshold} for '{c_id}'. Flagging REVIEW_REQUIRED.")
-                classification = EvaluatorClassification.REVIEW_REQUIRED
+        if conf < self.low_confidence_threshold:
+            logger.warning(f"Confidence {conf:.2f} < threshold {self.low_confidence_threshold}. Flagging REVIEW_REQUIRED.")
+            classification = EvaluatorClassification.REVIEW_REQUIRED
+            awarded_marks = 0.0
 
             # Ensure evidence quote is present in student answer
-            if evidence and evidence not in req.student_answer:
-                evidence = req.student_answer[:120] if len(req.student_answer) > 120 else req.student_answer
+        if evidence and evidence not in req.student_answer:
+            evidence = req.student_answer[:120] if len(req.student_answer) > 120 else req.student_answer
 
-            eval_outputs.append(CriterionEvaluationOutput(
-                criterion_id=c_id,
-                criterion_text=item.criterion,
-                allocated_marks=alloc_marks,
-                classification=classification,
-                confidence=conf,
-                evidence_quote=evidence,
-                reasoning=reasoning
-            ))
+        eval_outputs.append(CriterionEvaluationOutput(
+            criterion_id="c1",
+            criterion_text="Overall answer evaluation",
+            allocated_marks=max_marks,
+            awarded_marks=awarded_marks,
+            classification=classification,
+            confidence=conf,
+            evidence_quote=evidence,
+            reasoning=reasoning
+        ))
 
         elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
         conf_scores = [e.confidence for e in eval_outputs]

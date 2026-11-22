@@ -7,6 +7,7 @@ import {
   ChevronRight, Loader2, AlertCircle, RefreshCw, XCircle, Eye
 } from 'lucide-react';
 import { facialExpressionAnalyzer } from '../../services/facialExpressionAnalyzer';
+import { proctoringAnalyzer } from '../../services/proctoringAnalyzer';
 
 // ---------------------------------------------------------------------------
 // VIVA STATE MACHINE
@@ -40,6 +41,16 @@ const formatTime = (secs) => {
 
 const getUserFromStorage = () => {
   try { return JSON.parse(localStorage.getItem('autoviva_user') || '{}'); } catch { return {}; }
+};
+
+const readProctoringRecord = (key) => {
+  try {
+    const record = JSON.parse(localStorage.getItem(key) || '{}');
+    const warningCount = Math.max(0, Math.min(4, Number(record.warningCount) || 0));
+    return { warningCount, terminated: record.terminated === true || warningCount >= 4 };
+  } catch {
+    return { warningCount: 0, terminated: false };
+  }
 };
 
 // Build a rubric array that the backend EvaluateAnswerRequest expects.
@@ -199,6 +210,28 @@ function VivaCompleteScreen({ vivaInfo, submittedCount, totalCount, completedAt,
   );
 }
 
+function WarningLimitScreen({ onReturn }) {
+  return (
+    <div className="flex-1 flex items-center justify-center p-8">
+      <div className="max-w-lg w-full bg-white rounded-3xl border border-rose-200 shadow-sm p-8 space-y-5 text-center">
+        <div className="w-16 h-16 rounded-full bg-rose-100 border-2 border-rose-300 flex items-center justify-center mx-auto">
+          <XCircle className="w-8 h-8 text-rose-600" />
+        </div>
+        <h2 className="text-xl font-extrabold text-slate-900">Viva Examination Ended</h2>
+        <p className="text-sm text-slate-600">
+          You have reached your warning limit. You cannot give the viva now.
+        </p>
+        <button
+          onClick={onReturn}
+          className="w-full py-3 bg-[#0F766E] hover:bg-[#0D645D] text-white font-bold text-sm rounded-2xl"
+        >
+          Back to Student Dashboard
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // MAIN COMPONENT
 // ---------------------------------------------------------------------------
@@ -213,6 +246,8 @@ export default function LiveVivaSession() {
   const [attemptStartedAt] = useState(() => searchParams.get('attempt_started_at') || new Date().toISOString());
   const user = getUserFromStorage();
   const studentId = user.user_id || 'std_anonymous';
+  const proctoringStorageKey = `autoviva_proctoring_${vivaId}_${studentId}`;
+  const [initialProctoringRecord] = useState(() => readProctoringRecord(proctoringStorageKey));
 
   // --- Questions ---
   const [questions, setQuestions] = useState([]);
@@ -238,9 +273,31 @@ export default function LiveVivaSession() {
   const liveTranscriptRef = useRef('');
   const vivaStateRef = useRef('LOADING');
   const stopInFlightRef = useRef(false);
+  const warningCountRef = useRef(initialProctoringRecord.warningCount);
+  const warningLimitRef = useRef(initialProctoringRecord.terminated);
+  const activeIncidentsRef = useRef(new Set());
+  const pendingIncidentsRef = useRef(new Map());
+  const warningFlushTimerRef = useRef(null);
+  const cameraSignalsRef = useRef({
+    personHits: 0,
+    personMisses: 0,
+    itemHits: 0,
+    itemMisses: 0,
+  });
 
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [permissionError, setPermissionError] = useState('');
+  const [proctoringStatus, setProctoringStatus] = useState(
+    initialProctoringRecord.terminated ? 'ended' : 'loading'
+  );
+  const [proctoringError, setProctoringError] = useState('');
+  const [warningCount, setWarningCount] = useState(initialProctoringRecord.warningCount);
+  const [warningMessage, setWarningMessage] = useState(
+    initialProctoringRecord.warningCount > 0
+      ? `Warning count: ${initialProctoringRecord.warningCount} of 3.`
+      : ''
+  );
+  const [warningLimitReached, setWarningLimitReached] = useState(initialProctoringRecord.terminated);
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordTimer, setRecordTimer] = useState(120);
@@ -303,10 +360,131 @@ export default function LiveVivaSession() {
     try { localStorage.removeItem(persistenceKey); } catch (_) {}
   }, [persistenceKey]);
 
+  const endForWarningLimit = useCallback(() => {
+    warningLimitRef.current = true;
+    window.speechSynthesis?.cancel();
+    try { recognitionRef.current?.stop(); } catch (_) {}
+
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = null;
+      try { recorder.stop(); } catch (error) {
+        console.error('Could not stop the answer recorder after the warning limit.', error);
+      }
+    }
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+
+    if (warningFlushTimerRef.current) {
+      window.clearTimeout(warningFlushTimerRef.current);
+      warningFlushTimerRef.current = null;
+    }
+    pendingIncidentsRef.current.clear();
+
+    try {
+      localStorage.setItem(proctoringStorageKey, JSON.stringify({
+        warningCount: 4,
+        terminated: true,
+      }));
+      localStorage.removeItem(persistenceKey);
+    } catch (error) {
+      console.error('Could not persist the proctoring warning limit.', error);
+      setProctoringError('The warning limit could not be saved in this browser.');
+    }
+
+    setWarningCount(4);
+    setWarningLimitReached(true);
+    setProctoringStatus('ended');
+    setPermissionGranted(false);
+    setIsRecording(false);
+    setIsPaused(false);
+    setIsProcessingSTT(false);
+    setVivaState('WARNING_LIMIT_REACHED');
+  }, [persistenceKey, proctoringStorageKey]);
+
+  const recordWarningBatch = useCallback((messages) => {
+    const nextCount = warningCountRef.current + 1;
+    const isLimitReached = nextCount >= 4;
+    warningCountRef.current = nextCount;
+
+    try {
+      localStorage.setItem(proctoringStorageKey, JSON.stringify({
+        warningCount: nextCount,
+        terminated: isLimitReached,
+      }));
+    } catch (error) {
+      console.error('Could not save proctoring warnings in this browser.', error);
+      setProctoringError('Warning history could not be saved in this browser.');
+    }
+
+    setWarningCount(nextCount);
+    setWarningMessage(isLimitReached
+      ? 'You have reached your warning limit. You cannot give the viva now.'
+      : `Warning ${nextCount} of 3: ${messages.join(' ')}${nextCount === 3 ? ' This is your final warning; another violation will end the viva.' : ''}`);
+
+    if (isLimitReached) endForWarningLimit();
+  }, [endForWarningLimit, proctoringStorageKey]);
+
+  const queueViolation = useCallback((incidentKey, message) => {
+    if (warningLimitRef.current || activeIncidentsRef.current.has(incidentKey)) return;
+
+    activeIncidentsRef.current.add(incidentKey);
+    pendingIncidentsRef.current.set(incidentKey, message);
+    if (warningFlushTimerRef.current) return;
+
+    warningFlushTimerRef.current = window.setTimeout(() => {
+      warningFlushTimerRef.current = null;
+      const messages = [...pendingIncidentsRef.current.values()];
+      pendingIncidentsRef.current.clear();
+      if (messages.length > 0) recordWarningBatch(messages);
+    }, 200);
+  }, [recordWarningBatch]);
+
+  const updateCameraIncidents = useCallback((result) => {
+    if (warningLimitRef.current) return;
+    const signals = cameraSignalsRef.current;
+
+    if (result.personCount > 1) {
+      signals.personHits += 1;
+      signals.personMisses = 0;
+      if (signals.personHits >= 2) {
+        queueViolation('additional-person', 'An additional person was detected in the camera frame.');
+      }
+    } else {
+      signals.personHits = 0;
+      signals.personMisses += 1;
+      if (signals.personMisses >= 3) activeIncidentsRef.current.delete('additional-person');
+    }
+
+    if (result.prohibitedItems.length > 0) {
+      signals.itemHits += 1;
+      signals.itemMisses = 0;
+      if (signals.itemHits >= 2) {
+        const items = result.prohibitedItems.join(', ');
+        queueViolation('prohibited-items', `Prohibited item detected: ${items}.`);
+      }
+    } else {
+      signals.itemHits = 0;
+      signals.itemMisses += 1;
+      if (signals.itemMisses >= 3) activeIncidentsRef.current.delete('prohibited-items');
+    }
+  }, [queueViolation]);
+
   // ---------------------------------------------------------------------------
   // FETCH QUESTIONS ON MOUNT — restore progress if available
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (warningLimitRef.current) {
+      setVivaState('WARNING_LIMIT_REACHED');
+      setWarningLimitReached(true);
+      setProctoringStatus('ended');
+      return;
+    }
+
     const fetchQuestions = async () => {
       setVivaState('LOADING');
       setLoadError('');
@@ -377,6 +555,7 @@ export default function LiveVivaSession() {
   // MEDIA PERMISSIONS
   // ---------------------------------------------------------------------------
   const requestMediaPermissions = useCallback(async () => {
+    if (warningLimitRef.current) return;
     setPermissionError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -401,24 +580,57 @@ export default function LiveVivaSession() {
   }, [requestMediaPermissions]);
 
   // ---------------------------------------------------------------------------
-  // FACIAL EXPRESSION ANALYSIS
+  // CAMERA-BASED PROCTORING AND FACIAL EXPRESSION ANALYSIS
   // ---------------------------------------------------------------------------
   useEffect(() => {
     let animFrameId = null;
     let active = true;
 
     const run = async () => {
-      if (!permissionGranted || !videoRef.current) return;
-      const loaded = await facialExpressionAnalyzer.initialize();
-      if (!loaded || !active) {
+      if (!permissionGranted || !videoRef.current || warningLimitRef.current) return;
+      const [faceResult, detectorResult] = await Promise.allSettled([
+        facialExpressionAnalyzer.initialize(),
+        proctoringAnalyzer.initialize(),
+      ]);
+      if (!active) return;
+
+      const faceLoaded = faceResult.status === 'fulfilled' && faceResult.value;
+      let detectorReady = detectorResult.status === 'fulfilled';
+
+      if (!faceLoaded) {
         setFacialAnalysis({ state: 'MODEL_UNAVAILABLE', displayLabel: 'Analysis unavailable', confidence: 0, faceDetected: false });
-        return;
       }
+      if (detectorReady) {
+        setProctoringStatus('active');
+        setProctoringError('');
+      } else {
+        console.error('Could not initialize the proctoring object detector.', detectorResult.reason);
+        setProctoringStatus('unavailable');
+        setProctoringError('Proctoring checks could not load. Reload the viva before recording.');
+      }
+
+      let lastObjectDetectionAt = 0;
       const loop = (ts) => {
-        if (!active) return;
-        if (videoRef.current && videoRef.current.readyState >= 2) {
+        if (!active || warningLimitRef.current) return;
+        if (videoRef.current && videoRef.current.readyState >= 2 && faceLoaded) {
           const result = facialExpressionAnalyzer.analyzeVideoFrame(videoRef.current, ts);
           if (result && active) setFacialAnalysis(result);
+        }
+        if (
+          detectorReady &&
+          videoRef.current &&
+          videoRef.current.readyState >= 2 &&
+          ts - lastObjectDetectionAt >= 500
+        ) {
+          lastObjectDetectionAt = ts;
+          try {
+            updateCameraIncidents(proctoringAnalyzer.detectForVideo(videoRef.current, ts));
+          } catch (error) {
+            detectorReady = false;
+            console.error('Proctoring object detection failed during the viva.', error);
+            setProctoringStatus('unavailable');
+            setProctoringError('Proctoring checks stopped. Reload the viva before recording.');
+          }
         }
         animFrameId = requestAnimationFrame(loop);
       };
@@ -427,13 +639,33 @@ export default function LiveVivaSession() {
 
     if (permissionGranted) run();
     return () => { active = false; if (animFrameId) cancelAnimationFrame(animFrameId); };
-  }, [permissionGranted]);
+  }, [permissionGranted, updateCameraIncidents, warningLimitReached]);
+
+  useEffect(() => {
+    const activeVivaStates = new Set([
+      'AI_SPEAKING', 'LISTENING', 'RECORDING', 'PAUSED', 'PROCESSING',
+      'TRANSCRIPT_READY', 'SUBMITTING', 'SUBMIT_ERROR', 'NEXT_LOADING',
+    ]);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (activeVivaStates.has(vivaStateRef.current)) {
+          queueViolation('tab-hidden', 'Leaving the viva tab was detected.');
+        }
+      } else {
+        activeIncidentsRef.current.delete('tab-hidden');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [queueViolation]);
 
   // ---------------------------------------------------------------------------
   // TIMERS
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (vivaState === 'VIVA_COMPLETE' || vivaState === 'LOADING' || vivaState === 'LOAD_ERROR') return;
+    if (vivaState === 'VIVA_COMPLETE' || vivaState === 'WARNING_LIMIT_REACHED' || vivaState === 'LOADING' || vivaState === 'LOAD_ERROR') return;
     const id = setInterval(() => setElapsedTimer(p => p + 1), 1000);
     return () => clearInterval(id);
   }, [vivaState]);
@@ -454,7 +686,7 @@ export default function LiveVivaSession() {
   // ---------------------------------------------------------------------------
   const finishSpeaking = useCallback((generation) => {
     if (generation !== ttsGenerationRef.current) return;
-    const blocked = ['RECORDING', 'PAUSED', 'PROCESSING', 'SUBMITTING', 'NEXT_LOADING', 'VIVA_COMPLETE', 'LOAD_ERROR', 'LOADING'];
+    const blocked = ['RECORDING', 'PAUSED', 'PROCESSING', 'SUBMITTING', 'NEXT_LOADING', 'VIVA_COMPLETE', 'WARNING_LIMIT_REACHED', 'LOAD_ERROR', 'LOADING'];
     if (blocked.includes(vivaStateRef.current)) return;
     setVivaState('LISTENING');
   }, []);
@@ -464,7 +696,7 @@ export default function LiveVivaSession() {
       setVivaState('LISTENING');
       return;
     }
-    if (['RECORDING', 'PAUSED', 'PROCESSING', 'SUBMITTING', 'VIVA_COMPLETE'].includes(vivaStateRef.current)) {
+    if (['RECORDING', 'PAUSED', 'PROCESSING', 'SUBMITTING', 'VIVA_COMPLETE', 'WARNING_LIMIT_REACHED'].includes(vivaStateRef.current)) {
       return;
     }
 
@@ -522,8 +754,13 @@ export default function LiveVivaSession() {
   };
 
   const handleStartRecording = () => {
+    if (warningLimitRef.current) return;
     if (!permissionGranted || !mediaStreamRef.current) {
       setPermissionError('Please grant camera and microphone permissions to record your answer.');
+      return;
+    }
+    if (proctoringStatus !== 'active') {
+      setPermissionError(proctoringError || 'Camera safety checks are not ready. Please wait or reload the viva.');
       return;
     }
     if (stopInFlightRef.current) return;
@@ -643,7 +880,7 @@ export default function LiveVivaSession() {
   };
 
   const handleStopRecording = useCallback(() => {
-    if (!isRecordingRef.current || stopInFlightRef.current) return;
+    if (warningLimitRef.current || !isRecordingRef.current || stopInFlightRef.current) return;
     stopInFlightRef.current = true;
     isRecordingRef.current = false;
     isPausedRef.current = false;
@@ -663,6 +900,7 @@ export default function LiveVivaSession() {
       finished = true;
       try {
         const text = await transcribeRecording(mimeType);
+        if (warningLimitRef.current) return;
         setTranscript(text);
         if (!text) {
           setSubmitError('No speech was detected. Please re-record or type your answer in the box below.');
@@ -670,10 +908,14 @@ export default function LiveVivaSession() {
           setSubmitError('');
         }
       } catch (_) {
-        setSubmitError(_.message || 'Transcription failed. You can type your answer in the box below, then submit.');
+        if (!warningLimitRef.current) {
+          setSubmitError(_.message || 'Transcription failed. You can type your answer in the box below, then submit.');
+        }
       } finally {
-        setIsProcessingSTT(false);
-        setVivaState('TRANSCRIPT_READY');
+        if (!warningLimitRef.current) {
+          setIsProcessingSTT(false);
+          setVivaState('TRANSCRIPT_READY');
+        }
         stopInFlightRef.current = false;
       }
     };
@@ -698,7 +940,7 @@ export default function LiveVivaSession() {
   // ANSWER SUBMISSION
   // ---------------------------------------------------------------------------
   const handleSubmitAnswer = async () => {
-    if (submissionInFlightRef.current) return;
+    if (warningLimitRef.current || submissionInFlightRef.current) return;
 
     const answer = liveTranscriptRef.current ?? liveTranscript;
     if (!answer.trim()) {
@@ -723,6 +965,7 @@ export default function LiveVivaSession() {
         ideal_answer: (question.ideal_answer || question.question_text || '').trim(),
         evaluation_rubric: rubric,
         student_answer: answer,
+        allocated_marks: parseFloat(question.allocated_marks || question.marks || question.total_marks || 10),
         subject: question.subject || vivaInfo?.subject || 'General',
         topic: question.topic || vivaInfo?.topic || 'General',
         question_id: question.question_id || '',
@@ -749,6 +992,7 @@ export default function LiveVivaSession() {
       }
 
       const evalRecord = await res.json();
+      if (warningLimitRef.current) return;
       const evalId = evalRecord?.evaluation_id;
       if (typeof evalId !== 'string' || !evalId.trim()) {
         throw new Error('Evaluation completed without a valid evaluation record. Please retry submission.');
@@ -781,8 +1025,10 @@ export default function LiveVivaSession() {
         }, 700);
       }
     } catch (e) {
-      setSubmitError(e.message || 'Answer could not be submitted. Please try again.');
-      setVivaState('SUBMIT_ERROR');
+      if (!warningLimitRef.current) {
+        setSubmitError(e.message || 'Answer could not be submitted. Please try again.');
+        setVivaState('SUBMIT_ERROR');
+      }
     } finally {
       submissionInFlightRef.current = false;
       setIsSubmitting(false);
@@ -828,6 +1074,14 @@ export default function LiveVivaSession() {
     );
   }
 
+  if (vivaState === 'WARNING_LIMIT_REACHED') {
+    return (
+      <div className="flex-1 flex flex-col bg-[#F8FAFC]">
+        <WarningLimitScreen onReturn={() => navigate('/student/dashboard')} />
+      </div>
+    );
+  }
+
   if (vivaState === 'VIVA_COMPLETE') {
     return (
       <div className="flex-1 flex flex-col bg-[#F8FAFC]">
@@ -851,7 +1105,10 @@ export default function LiveVivaSession() {
   const submittedCount = Object.keys(submittedIds).length;
   const progressPct = questions.length > 0 ? Math.round((submittedCount / questions.length) * 100) : 0;
 
-  const canRecord = ['LISTENING', 'AI_SPEAKING', 'TRANSCRIPT_READY', 'SUBMIT_ERROR'].includes(vivaState) && permissionGranted && !isRecording;
+  const canRecord = ['LISTENING', 'AI_SPEAKING', 'TRANSCRIPT_READY', 'SUBMIT_ERROR'].includes(vivaState)
+    && permissionGranted
+    && proctoringStatus === 'active'
+    && !isRecording;
   const canSubmit = ['TRANSCRIPT_READY', 'SUBMIT_ERROR', 'LISTENING'].includes(vivaState) && liveTranscript.trim().length > 0 && !isSubmitting;
   const canEditAnswer = ['TRANSCRIPT_READY', 'SUBMIT_ERROR', 'LISTENING'].includes(vivaState);
   const showTranscript = ['TRANSCRIPT_READY', 'SUBMITTING', 'SUBMIT_ERROR', 'NEXT_LOADING'].includes(vivaState)
@@ -860,6 +1117,29 @@ export default function LiveVivaSession() {
 
   return (
     <div className="min-h-[calc(100dvh-4rem)] lg:h-[calc(100dvh-4rem)] lg:min-h-0 w-full bg-[#F8FAFC] text-slate-800 flex flex-col font-sans antialiased lg:overflow-hidden">
+
+      {proctoringStatus === 'loading' && permissionGranted && (
+        <div className="shrink-0 bg-slate-50 border-b border-slate-200 px-6 py-2 text-slate-600 text-xs font-medium">
+          Loading camera safety checks. Recording will be available when checks are ready.
+        </div>
+      )}
+      {proctoringStatus === 'active' && (
+        <div className="shrink-0 bg-emerald-50 border-b border-emerald-200 px-6 py-2 text-emerald-800 text-xs font-medium">
+          Camera safety checks are active. Camera frames are processed in this browser.
+        </div>
+      )}
+      {proctoringStatus === 'unavailable' && (
+        <div className="shrink-0 bg-rose-50 border-b border-rose-200 px-6 py-2 text-rose-700 text-xs font-medium">
+          <AlertCircle className="w-4 h-4 inline mr-2" />
+          {proctoringError || 'Camera safety checks are unavailable. Reload the viva before recording.'}
+        </div>
+      )}
+      {warningCount > 0 && warningCount < 4 && warningMessage && (
+        <div role="alert" className="shrink-0 bg-amber-50 border-b border-amber-300 px-6 py-2 text-amber-900 text-xs font-semibold">
+          <AlertCircle className="w-4 h-4 inline mr-2" />
+          {warningMessage}
+        </div>
+      )}
 
       {/* Permission banner */}
       {permissionError && (

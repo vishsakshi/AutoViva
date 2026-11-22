@@ -114,11 +114,13 @@ The 3-module explainable evaluation engine separates AI classification from nume
 
 ---
 
-## 6. Facial Telemetry (Non-Marking Supplementary Telemetry)
+## 6. Viva Proctoring Checks and Supplementary Facial Telemetry
 
-- **Purely Supplementary**: WebRTC facial attention and expression telemetry runs client-side to provide faculty with supplementary context (e.g., student focus percentage).
-- **ZERO Marks Contribution**: The evaluation engine derives 100% of marks strictly from text rubric criteria. Facial telemetry contributes **0.0 marks**.
-- **Fault-Tolerant Execution**: If the camera is disabled, ungranted, or unavailable, the student viva examination continues without interruption.
+- The live viva page warns when the browser tab becomes hidden. A web page can detect loss of visibility, but it cannot prevent a student from switching tabs.
+- MediaPipe Object Detector analyzes camera frames in the browser and warns for an additional detected person, cell phone, book, or laptop. Frames are processed client-side; the detector model and MediaPipe runtime are fetched from their configured public URLs.
+- The standard detector does not reliably identify paper or tablets. Detection can also produce false positives or miss objects, so these checks are not tamper-proof proctoring.
+- The warning count is stored in browser local storage per student and viva. A continuous camera detection counts once until it clears; simultaneous detections are grouped as one incident. The first three incidents show warnings; the fourth ends the attempt. This client-side limit is not a substitute for server-side enforcement in high-stakes examinations.
+- Facial-expression telemetry remains supplementary and is not included in the answer-mark calculation.
 
 ---
 
@@ -135,9 +137,10 @@ The 3-module explainable evaluation engine separates AI classification from nume
 ### Student Workflow:
 1. **Login & Browse**: Access active published viva sessions (`GET /api/viva/published`).
 2. **Start Examination**: Receive active approved questions with 120s timer per question (`GET /api/viva/active-questions`).
-3. **Record Oral Response**: Speak into microphone; audio is transcribed via STT (`POST /api/viva/transcribe`).
-4. **Submit & Next**: Submit answer payload to 3-module evaluation pipeline (`POST /api/evaluation/submit`); progress sequentially to the next question.
-5. **View Results**: Receive score, criterion breakdown, strengths, and actionable feedback.
+3. **Proctoring Warnings**: The page warns on tab visibility changes and detected people or supported prohibited objects. The fourth incident ends the attempt.
+4. **Record Oral Response**: Speak into microphone; audio is transcribed via STT (`POST /api/viva/transcribe`).
+5. **Submit & Next**: Submit answer payload to 3-module evaluation pipeline (`POST /api/evaluation/submit`); progress sequentially to the next question.
+6. **View Results**: Receive score, criterion breakdown, strengths, and actionable feedback.
 
 ---
 

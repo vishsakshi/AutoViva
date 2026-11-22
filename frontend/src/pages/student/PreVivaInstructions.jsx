@@ -22,6 +22,7 @@ export default function PreVivaInstructions() {
   const [readyChecked, setReadyChecked] = useState(false);
   const [permTested, setPermTested] = useState(false);
   const [permError, setPermError] = useState('');
+  const [warningLimitReached, setWarningLimitReached] = useState(false);
 
   // Fetch viva metadata and question count
   useEffect(() => {
@@ -29,6 +30,25 @@ export default function PreVivaInstructions() {
       setLoading(true);
       setLoadError('');
       try {
+        let currentUser = {};
+        try {
+          currentUser = JSON.parse(localStorage.getItem('autoviva_user') || '{}');
+        } catch {
+          currentUser = {};
+        }
+        if (vivaId) {
+          const warningKey = `autoviva_proctoring_${vivaId}_${currentUser.user_id || 'std_anonymous'}`;
+          try {
+            const warningRecord = JSON.parse(localStorage.getItem(warningKey) || '{}');
+            if (warningRecord.terminated === true || Number(warningRecord.warningCount) >= 4) {
+              setWarningLimitReached(true);
+              return;
+            }
+          } catch (error) {
+            console.error('Could not read the saved viva warning state.', error);
+          }
+        }
+
         // Get viva session details
         if (vivaId) {
           const vRes = await fetch(getApiUrl(`/api/viva/session/${vivaId}`), { headers: getAuthHeaders() });
@@ -78,13 +98,21 @@ export default function PreVivaInstructions() {
     }
   };
 
-  const canBegin = micChecked && readyChecked && !loadError && questionCount !== null;
+  const canBegin = micChecked && readyChecked && !loadError && !warningLimitReached && questionCount !== null;
 
   const handleBeginViva = () => {
     let user = {};
     let savedProgress = null;
     try {
       user = JSON.parse(localStorage.getItem('autoviva_user') || '{}');
+      if (vivaId) {
+        const warningKey = `autoviva_proctoring_${vivaId}_${user.user_id || 'std_anonymous'}`;
+        const warningRecord = JSON.parse(localStorage.getItem(warningKey) || '{}');
+        if (warningRecord.terminated === true || Number(warningRecord.warningCount) >= 4) {
+          setWarningLimitReached(true);
+          return;
+        }
+      }
       if (resumeAttempt && vivaId) {
         savedProgress = JSON.parse(
           localStorage.getItem(`autoviva_progress_${vivaId}_${user.user_id || 'std_anonymous'}`) || 'null'
@@ -143,8 +171,20 @@ export default function PreVivaInstructions() {
           </div>
         )}
 
+        {!loading && warningLimitReached && (
+          <div role="alert" className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-rose-800">Viva unavailable</p>
+              <p className="text-xs text-rose-700 mt-0.5">
+                You have reached your warning limit. You cannot give the viva now.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Viva summary */}
-        {!loading && !loadError && (
+        {!loading && !loadError && !warningLimitReached && (
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
             <h2 className="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2">
               <BookOpen className="w-3.5 h-3.5 text-[#0F766E]" /> Examination Details
@@ -168,7 +208,7 @@ export default function PreVivaInstructions() {
         )}
 
         {/* Instructions */}
-        {!loading && !loadError && (
+        {!loading && !loadError && !warningLimitReached && (
           <div className="space-y-2.5">
             <h2 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Instructions</h2>
             {[
@@ -178,6 +218,8 @@ export default function PreVivaInstructions() {
               { icon: <CheckCircle2 className="w-4 h-4 text-[#0F766E]" />, text: 'After stopping the recording, review your transcript then click "Submit Answer".' },
               { icon: <ShieldCheck className="w-4 h-4 text-[#0F766E]" />, text: 'Your answers are submitted directly to the backend for AI evaluation and faculty review.' },
               { icon: <AlertCircle className="w-4 h-4 text-rose-500" />, text: 'Do not close or refresh the page once the viva has started — your progress is auto-saved.' },
+              { icon: <AlertCircle className="w-4 h-4 text-rose-500" />, text: 'Do not switch tabs. Each incident counts as one warning; the fourth warning ends the viva.' },
+              { icon: <Video className="w-4 h-4 text-[#0F766E]" />, text: 'In-browser camera checks look for additional people, cell phones, books, and laptops. Paper or tablets may not be detected reliably.' },
             ].map(({ icon, text }, i) => (
               <div key={i} className="flex items-start gap-3 text-xs text-slate-600">
                 <span className="shrink-0 mt-0.5">{icon}</span>
@@ -188,7 +230,7 @@ export default function PreVivaInstructions() {
         )}
 
         {/* Pre-flight checks */}
-        {!loading && !loadError && (
+        {!loading && !loadError && !warningLimitReached && (
           <div className="space-y-3">
             <h2 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Pre-flight Checks</h2>
 
@@ -252,7 +294,7 @@ export default function PreVivaInstructions() {
         )}
 
         {/* Begin button */}
-        {!loading && !loadError && (
+        {!loading && !loadError && !warningLimitReached && (
           <button
             onClick={handleBeginViva}
             disabled={!canBegin}
@@ -262,7 +304,7 @@ export default function PreVivaInstructions() {
           </button>
         )}
 
-        {!canBegin && !loading && !loadError && (
+        {!canBegin && !loading && !loadError && !warningLimitReached && (
           <p className="text-center text-[11px] text-slate-400">
             Please complete all pre-flight checks before beginning.
           </p>
